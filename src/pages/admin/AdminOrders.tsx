@@ -34,7 +34,9 @@ export default function AdminOrders() {
         status: ord.status,
         items: ord.items,
         createdAt: { toDate: () => new Date(ord.created_at) } as any,
-        cancelledAt: ord.cancelled_at ? { toDate: () => new Date(ord.cancelled_at) } as any : undefined
+        cancelledAt: ord.cancelled_at ? { toDate: () => new Date(ord.cancelled_at) } as any : undefined,
+        cancelledBy: ord.cancelled_by,
+        cancellationReason: ord.cancellation_reason
       }])).values());
 
       setOrders(formattedOrders);
@@ -75,6 +77,12 @@ export default function AdminOrders() {
       const updateData: any = { status: newStatus };
       if (newStatus === 'Cancelled') {
         updateData.cancelled_at = new Date().toISOString();
+        updateData.cancelled_by = 'admin';
+        updateData.cancellation_reason = 'Cancelled by admin';
+      } else {
+        updateData.cancelled_at = null;
+        updateData.cancelled_by = null;
+        updateData.cancellation_reason = null;
       }
 
       const { error } = await supabase
@@ -186,7 +194,7 @@ export default function AdminOrders() {
                         </div>
                         {order.cancelledAt && (
                           <div className="text-[9px] uppercase tracking-widest font-bold text-red-500 mt-1 flex items-center gap-1">
-                            <XCircle size={8} /> Cancelled: {order.cancelledAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            <XCircle size={8} /> Cancelled by {order.cancelledBy || 'admin'}: {order.cancelledAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                           </div>
                         )}
                      </td>
@@ -255,6 +263,13 @@ export default function AdminOrders() {
                                                 {order.paymentMethod}
                                              </span>
                                           </div>
+                                          {order.cancelledAt && (
+                                              <div className="flex flex-col gap-1 mt-4 p-4 border border-rose-100 bg-rose-50/50 rounded-sm">
+                                                 <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-rose-500 mb-1">Cancellation Detail</span>
+                                                 <span className="text-xs font-bold text-rose-900 block">By: {order.cancelledBy === 'user' ? 'Customer' : 'Store Admin'}</span>
+                                                 <span className="text-[10px] text-rose-700 uppercase tracking-widest block mt-1">{order.cancellationReason || 'No reason specified'}</span>
+                                              </div>
+                                          )}
                                        </div>
                                     </div>
 

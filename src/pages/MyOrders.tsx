@@ -12,6 +12,16 @@ export default function MyOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   useEffect(() => {
     if (!user) return;
@@ -69,28 +79,47 @@ export default function MyOrders() {
     };
   }, [user]);
 
-  const cancelOrder = async (orderId: string) => {
-    try {
-      if (!user) return;
+  const cancelOrder = (orderId: string) => {
+    setOrderToCancel(orderId);
+    setModalOpen(true);
+  };
 
-      setCancellingId(orderId);
+  const confirmCancellation = async () => {
+    if (!user || !orderToCancel) return;
+
+    try {
+      setCancellingId(orderToCancel);
       
       const { error } = await supabase
         .from('orders')
-        .update({ status: 'cancelled' })
-        .eq('id', orderId)
+        .update({ 
+          status: 'cancelled',
+          cancelled_by: 'user',
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: 'Cancelled by customer'
+        })
+        .eq('id', orderToCancel)
         .eq('user_id', user.id);
 
       if (error) throw error;
 
       // Update UI
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
-      alert('Order cancelled successfully');
+      setOrders(prev => prev.map(o => o.id === orderToCancel ? { 
+        ...o, 
+        status: 'cancelled',
+        cancelledBy: 'user',
+        cancelledAt: { toDate: () => new Date() } as any,
+        cancellationReason: 'Cancelled by customer'
+      } : o));
+      
+      setToastMessage('Your order has been cancelled successfully');
     } catch (error: any) {
       console.error("Cancel error:", error);
-      alert(`Cancel failed: ${error.message || 'Unknown error'}`);
+      setToastMessage(`Cancel failed: ${error.message || 'Unknown error'}`);
     } finally {
       setCancellingId(null);
+      setModalOpen(false);
+      setOrderToCancel(null);
     }
   };
 
@@ -168,6 +197,11 @@ export default function MyOrders() {
                             `Placed on ${order.createdAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })} at ${order.createdAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
                           ) : 'Processing order details...'}
                         </div>
+                        {order.cancelledAt && typeof order.cancelledAt.toDate === 'function' && (
+                          <div className="text-[10px] uppercase tracking-widest font-bold text-rose-500 mt-1">
+                            Cancelled on {order.cancelledAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col md:items-end">
@@ -241,6 +275,73 @@ export default function MyOrders() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {modalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => {
+                if (!cancellingId) {
+                  setModalOpen(false);
+                  setOrderToCancel(null);
+                }
+              }}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative bg-white w-full max-w-md border border-zinc-200 rounded-sm shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 pb-6 text-center">
+                <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <XCircle size={32} className="text-rose-500" />
+                </div>
+                <h3 className="text-2xl font-serif mb-2">Cancel Order</h3>
+                <p className="text-zinc-500 text-sm">Are you sure you want to cancel this order? This action cannot be undone.</p>
+              </div>
+              <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex gap-3">
+                <button 
+                  onClick={() => {
+                    setModalOpen(false);
+                    setOrderToCancel(null);
+                  }}
+                  disabled={cancellingId !== null}
+                  className="flex-1 py-3 text-[10px] uppercase tracking-widest font-bold border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors rounded-sm disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmCancellation}
+                  disabled={cancellingId !== null}
+                  className="flex-1 py-3 text-[10px] uppercase tracking-widest font-bold border border-rose-600 bg-rose-600 text-white hover:bg-rose-700 transition-colors rounded-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {cancellingId !== null ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Confirm Cancellation
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-6 py-4 rounded-sm shadow-2xl flex items-center gap-3 text-sm font-medium tracking-wide whitespace-nowrap"
+          >
+            <CheckCircle size={16} className="text-emerald-400" />
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -62,7 +62,9 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT DEFAULT 'pending',
   items JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  cancelled_at TIMESTAMP WITH TIME ZONE
+  cancelled_at TIMESTAMP WITH TIME ZONE,
+  cancelled_by TEXT,
+  cancellation_reason TEXT
 );
 
 -- 6. WISHLIST TABLE

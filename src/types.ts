@@ -55,6 +55,8 @@ export interface Order {
   totalAmount: number;
   createdAt: any;
   cancelledAt?: any;
+  cancelledBy?: string;
+  cancellationReason?: string;
   items: Array<{
     productId: string;
     productName: string;

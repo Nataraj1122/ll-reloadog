@@ -48,6 +48,9 @@ export default function MyOrders() {
           status: o.status,
           totalAmount: o.total_price,
           createdAt: { toDate: () => new Date(o.created_at) } as any, // Mocking Firebase toDate for UI compatibility
+          cancelledAt: o.cancelled_at ? { toDate: () => new Date(o.cancelled_at) } as any : undefined,
+          cancelledBy: o.cancelled_by,
+          cancellationReason: o.cancellation_reason,
           items: o.items
         }])).values());
         
@@ -172,7 +175,7 @@ export default function MyOrders() {
           <div className="space-y-8">
             {orders.map((order) => {
               if (!order) return null;
-              const statusValue = order.status || (order as any).orderStatus || 'pending';
+              const statusValue = order.status || 'pending';
               const statusInfo = getStatusInfo(statusValue);
               return (
                 <motion.div 

@@ -53,7 +53,7 @@ export default function AdminAnalytics() {
 
   // Process data for charts
   const salesByDate = orders.reduce((acc: any, order) => {
-    if (!order.createdAt?.toDate) return acc;
+    if (!order.createdAt?.toDate || order.status?.toLowerCase() === 'cancelled') return acc;
     const dateStr = order.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     if (!acc[dateStr]) acc[dateStr] = 0;
     acc[dateStr] += order.totalAmount;

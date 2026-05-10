@@ -93,27 +93,21 @@ export default function MyOrders() {
     try {
       setCancellingId(orderToCancel);
       
-      const { error } = await supabase
+      console.log('Cancelling order:', orderToCancel);
+      const { data, error } = await supabase
         .from('orders')
         .update({ 
           status: 'cancelled',
           cancelled_by: 'user',
-          cancelled_at: new Date().toISOString(),
-          cancellation_reason: 'Cancelled by customer'
+          cancelled_at: new Date().toISOString()
         })
         .eq('id', orderToCancel)
         .eq('user_id', user.id);
+        
+      console.log('Update result:', data);
+      console.log('Update error:', error);
 
       if (error) throw error;
-
-      // Update UI
-      setOrders(prev => prev.map(o => o.id === orderToCancel ? { 
-        ...o, 
-        status: 'cancelled',
-        cancelledBy: 'user',
-        cancelledAt: { toDate: () => new Date() } as any,
-        cancellationReason: 'Cancelled by customer'
-      } : o));
       
       setToastMessage('Order cancelled successfully');
     } catch (error: any) {

@@ -25,6 +25,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <motion.img 
           src={product.images && product.images.length > 0 ? product.images[0] : ""} 
           alt={product.name} 
+          loading="lazy"
           className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
         />
         

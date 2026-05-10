@@ -69,9 +69,12 @@ export function useSupabaseProducts() {
       const { data, error: sbError } = await supabase
         .from('products')
         .select('*')
+        .eq('is_active', true)
         .order('created_at', { ascending: false });
       
       if (sbError) throw sbError;
+      
+      console.log('Products fetched:', data);
       
       if (data) {
         setProducts(Array.from(new Map(data.map(p => [p.id, {
@@ -89,6 +92,7 @@ export function useSupabaseProducts() {
       }
     } catch (err) {
       console.error("Error fetching Supabase products:", err);
+      console.log('Products fetch error:', err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -97,10 +101,6 @@ export function useSupabaseProducts() {
 
   useEffect(() => {
     fetchProducts();
-
-    const authListener = supabase.auth.onAuthStateChange(() => {
-      fetchProducts();
-    });
 
     // Set up real-time listener
     const channel = supabase
@@ -111,7 +111,6 @@ export function useSupabaseProducts() {
       .subscribe();
 
     return () => {
-      authListener.data.subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [fetchProducts]);

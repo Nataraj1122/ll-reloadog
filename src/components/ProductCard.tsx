@@ -12,6 +12,7 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { toggleWishlist, isInWishlist, addToBag } = useAppContext();
   const [selectedSize, setSelectedSize] = useState('M');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   return (
     <motion.div 
@@ -22,11 +23,19 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       className="group relative"
     >
       <div className="aspect-[3/4] bg-zinc-100 mb-6 overflow-hidden relative shadow-sm group-hover:shadow-2xl transition-all duration-700">
+        {!isLoaded && (
+          <div className="absolute inset-0 bg-zinc-200 animate-pulse" />
+        )}
         <motion.img 
-          src={product.images && product.images.length > 0 ? product.images[0] : ""} 
+          src={product.images && product.images.length > 0 ? product.images[0] : "https://via.placeholder.com/400x500?text=No+Image"} 
           alt={product.name} 
           loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+          onLoad={() => setIsLoaded(true)}
+          onError={(e) => {
+             e.currentTarget.src = "https://via.placeholder.com/400x500?text=Image+Error";
+             setIsLoaded(true);
+          }}
+          className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
         
         {/* Badges */}

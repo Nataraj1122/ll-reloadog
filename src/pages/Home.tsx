@@ -20,11 +20,16 @@ const IMAGES = {
 
 export default function Home() {
   const { categories, loading: categoriesLoading, error: categoriesError, refetch: refetchCategories } = useSupabaseCategories();
-  const { products, loading: productsLoading, error: productsError, refetch: refetchProducts } = useSupabaseProducts();
+  const { products, loading: productsLoading, error: productsError, refetch: refetchProducts } = useSupabaseProducts(50);
   const { addToBag, toggleWishlist, isInWishlist } = useAppContext();
   const { hash } = useLocation();
   const navigate = useNavigate();
   const heroImg = IMAGES.hero;
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = IMAGES.hero;
+  }, []);
 
   useEffect(() => {
     if (hash) {

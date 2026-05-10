@@ -58,7 +58,7 @@ export function useSupabaseCategories() {
   return { categories, loading, error, refetch: fetchCategories };
 }
 
-export function useSupabaseProducts() {
+export function useSupabaseProducts(limit = 20, page = 1) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,11 +67,14 @@ export function useSupabaseProducts() {
     setLoading(true);
     setError(null);
     try {
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      
       const { data, error: sbError } = await supabase
         .from('products')
         .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
       
       if (sbError) throw sbError;
       
@@ -98,7 +101,7 @@ export function useSupabaseProducts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [limit, page]);
 
   useEffect(() => {
     fetchProducts();

@@ -1,9 +1,33 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+  --color-brand-gold: #C5A059;
+  --color-brand-bone: #F5F5F0;
+  --color-brand-sand: #E8E2D9;
+}
 
 @layer base {
   body {
     @apply antialiased bg-white text-black;
   }
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.btn-primary {
+  @apply bg-black text-white uppercase tracking-[0.3em] font-bold text-[11px] transition-all duration-300 hover:bg-neutral-800 disabled:opacity-50 flex items-center justify-center;
+}
+
+.btn-secondary {
+  @apply border border-black text-black uppercase tracking-[0.3em] font-bold text-[11px] transition-all duration-300 hover:bg-black hover:text-white disabled:opacity-50 flex items-center justify-center;
 }

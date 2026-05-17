@@ -1,52 +1,63 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
+import Layout from './components/Layout';
+import AdminRoute from './components/AdminRoute';
+import Home from './pages/Home';
+import Shop from './pages/Shop';
+import CategoryPage from './pages/CategoryPage';
+import NewArrivals from './pages/NewArrivals';
+import Collections from './pages/Collections';
+import Sale from './pages/Sale';
+import Wishlist from './pages/Wishlist';
+import CheckoutPage from './pages/CheckoutPage';
+import MyOrders from './pages/MyOrders';
+
+// Admin Pages
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminProducts from './pages/admin/AdminProducts';
+import AdminCategories from './pages/admin/AdminCategories';
+import AdminOrders from './pages/admin/AdminOrders';
+import AdminCustomers from './pages/admin/AdminCustomers';
+import AdminAnalytics from './pages/admin/AdminAnalytics';
+import AdminLogin from './pages/admin/AdminLogin';
 
 function App() {
   return (
-    <div className="min-h-screen bg-black text-white font-sans flex flex-col items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900 to-black z-0"></div>
-        
-        <div className="relative z-10 flex flex-col items-center justify-center text-center px-4">
-            <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
-                className="text-gray-400 text-sm md:text-base tracking-[0.4em] uppercase mb-6"
-            >
-                Reload
-            </motion.p>
+    <Router>
+      <AuthProvider>
+        <AppProvider>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Home />} />
+              <Route path="shop" element={<Shop />} />
+              <Route path="category/:id" element={<CategoryPage />} />
+              <Route path="new-arrivals" element={<NewArrivals />} />
+              <Route path="collections" element={<Collections />} />
+              <Route path="sale" element={<Sale />} />
+              <Route path="wishlist" element={<Wishlist />} />
+              <Route path="checkout" element={<CheckoutPage />} />
+              <Route path="my-orders" element={<MyOrders />} />
+            </Route>
+
+            {/* Admin Routes */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="categories" element={<AdminCategories />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="customers" element={<AdminCustomers />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
+            </Route>
             
-            <motion.h1 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-                className="text-5xl md:text-7xl font-serif mb-8 max-w-3xl leading-tight"
-            >
-                Premium Menswear
-            </motion.h1>
-            
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.4 }}
-                className="flex flex-col items-center"
-            >
-                <p className="text-gray-400 max-w-lg mb-10 text-lg">
-                    It looks like the project files were recently deleted and the GitHub repository link you provided (`https://github.com/Nataraj1122/ll-`) was either private or no longer exists (it returned a 404 error).
-                </p>
-                <p className="text-gray-400 max-w-lg mb-10 text-lg">
-                    How would you like to proceed? We can rebuild the elegant menswear shopping experience from scratch, or you can provide a different repository link!
-                </p>
-                
-                <button 
-                  onClick={() => alert('Tell me what you want to build in the chat!')}
-                  className="px-8 py-3 bg-white text-black text-sm uppercase tracking-widest font-semibold hover:bg-neutral-200 transition-colors"
-                >
-                    Let's Build
-                </button>
-            </motion.div>
-        </div>
-    </div>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AppProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 

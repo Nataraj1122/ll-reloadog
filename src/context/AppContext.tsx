@@ -28,12 +28,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('cartItems');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('cartItems');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error parsing cart from localStorage:', e);
+      return [];
+    }
   });
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>(() => {
-    const saved = localStorage.getItem('wishlistItems');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('wishlistItems');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error parsing wishlist from localStorage:', e);
+      return [];
+    }
   });
 
   // Sync Cart with Supabase

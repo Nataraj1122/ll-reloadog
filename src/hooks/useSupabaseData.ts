@@ -17,15 +17,22 @@ export function useSupabaseCategories() {
         .select('*')
         .order('name') as { data: CategoryTable[] | null, error: any };
       
-      if (sbError) throw sbError;
-      
-      if (data) {
-        setCategories(Array.from(new Map(data.map((cat: CategoryTable) => [cat.id, {
-          id: cat.id,
-          name: cat.name,
-          image: cat.image_url
-        }])).values()));
+      if (sbError) {
+        console.error("Supabase categories error:", sbError);
+        throw sbError;
       }
+      
+      if (!data || data.length === 0) {
+        console.warn("No categories found in Supabase.");
+        setCategories([]);
+        return;
+      }
+      
+      setCategories(Array.from(new Map(data.map((cat: CategoryTable) => [cat.id, {
+        id: cat.id,
+        name: cat.name || 'Uncategorized',
+        image: cat.image_url || ''
+      }])).values()));
     } catch (err: any) {
       console.error("Error fetching Supabase data:", err);
       const message = err?.message || err?.error?.message || err?.error || String(err);
@@ -78,26 +85,33 @@ export function useSupabaseProducts(limit = 20, page = 1) {
         .order('created_at', { ascending: false })
         .range(from, to) as { data: ProductTable[] | null, error: any };
       
-      if (sbError) throw sbError;
-      
-      console.log('Products fetched:', data);
-      
-      if (data) {
-        setProducts(Array.from(new Map(data.map((p: ProductTable) => [p.id, {
-          id: p.id,
-          name: p.name || 'Untitled Product',
-          price: p.price || 0,
-          categoryId: p.category_id || p.category || 'all',
-          images: p.image_url ? [p.image_url] : [],
-          description: p.description || '',
-          stock: p.stock_quantity || 0,
-          sizes: p.sizes || ['S', 'M', 'L', 'XL'],
-          isTrending: p.is_trending || false,
-          isNewArrival: p.is_new_arrival ?? true,
-          isActive: p.is_active ?? true,
-          productCode: p.product_code
-        }])).values()));
+      if (sbError) {
+        console.error("Supabase products error:", sbError);
+        throw sbError;
       }
+      
+      console.log(`Fetched ${data?.length || 0} products from Supabase range ${from}-${to}`);
+      
+      if (!data || data.length === 0) {
+        console.warn("No active products found in Supabase.");
+        setProducts([]);
+        return;
+      }
+      
+      setProducts(Array.from(new Map(data.map((p: ProductTable) => [p.id, {
+        id: p.id,
+        name: p.name || 'Untitled Product',
+        price: Number(p.price) || 0,
+        categoryId: p.category_id || p.category || 'all',
+        images: p.image_url ? [p.image_url] : [],
+        description: p.description || '',
+        stock: p.stock_quantity || 0,
+        sizes: Array.isArray(p.sizes) ? p.sizes : ['S', 'M', 'L', 'XL'],
+        isTrending: p.is_trending || false,
+        isNewArrival: p.is_new_arrival ?? true,
+        isActive: p.is_active ?? true,
+        productCode: p.product_code
+      }])).values()));
     } catch (err: any) {
       console.error("Error fetching Supabase products:", err);
       const message = err?.message || err?.error?.message || err?.error || String(err);

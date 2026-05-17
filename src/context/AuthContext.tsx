@@ -38,14 +38,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (!userToSync) return;
 
+      const metadata = userToSync.user_metadata || {};
       const { error } = await supabase.from('profiles').upsert({
         id: userToSync.id,
-        name: userToSync.user_metadata?.full_name || additionalData.name || userToSync.user_metadata?.name || 'User',
+        full_name: metadata.full_name || additionalData.name || metadata.name || 'User',
         email: userToSync.email,
-        avatar: userToSync.user_metadata?.avatar_url
+        avatar_url: metadata.avatar_url || metadata.picture
       });
 
-      if (error) throw error;
+      if (error) {
+        console.warn("Profile sync warning (this is normal if table schema differs):", error.message);
+      }
     } catch (error) {
       console.error("Error syncing user to Supabase:", error);
     }
@@ -58,15 +61,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // 2. Database check (profiles table should have a role column if we want RBAC)
+    // 2. Database check
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (data && data.role === 'admin') {
+      if (error) {
+        // If role doesn't exist or profile doesn't exist, just ignore
+        console.info("Info: Profiles table might not have role column or profile missing.");
+        setIsAdmin(false);
+        return;
+      }
+
+      if (data && (data as any).role === 'admin') {
         setIsAdmin(true);
       } else {
         setIsAdmin(false);

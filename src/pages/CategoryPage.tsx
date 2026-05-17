@@ -6,6 +6,7 @@ import { useSupabaseProducts, useSupabaseCategories } from '../hooks/useSupabase
 import { useAppContext } from '../context/AppContext';
 import { formatINR } from '../lib/utils';
 import { Product } from '../types';
+import { FALLBACK_IMAGE } from '../lib/supabase';
 import DataErrorState from '../components/DataErrorState';
 import ProductCard from '../components/ProductCard';
 
@@ -21,7 +22,8 @@ export default function CategoryPage() {
   const category = categories.find(c => c.id === id);
   const categoryProducts = products.filter(p => p.categoryId === id);
 
-  if (categoriesError || productsError) {
+  // Log errors but don't block rendering if possible
+  if ((categoriesError || productsError) && categories.length === 0 && products.length === 0) {
     return (
       <div className="min-h-screen pt-32 pb-24 flex items-center justify-center">
          <DataErrorState message={categoriesError || productsError || "An error occurred"} onRetry={() => {
@@ -89,7 +91,12 @@ export default function CategoryPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 h-full content-start">
                         {selectedProduct.images.map((img, idx) => (
                            <div key={`cat-modal-img-${selectedProduct.id}-${idx}`} className={idx === 0 ? "col-span-1 md:col-span-2 aspect-[4/5]" : "aspect-[3/4]"}>
-                              <img src={img} alt={`${selectedProduct.name} ${idx + 1}`} className="w-full h-full object-cover" />
+                              <img 
+                                src={img || FALLBACK_IMAGE} 
+                                alt={`${selectedProduct.name} ${idx + 1}`} 
+                                onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
+                                className="w-full h-full object-cover" 
+                              />
                            </div>
                         ))}
                     </div>

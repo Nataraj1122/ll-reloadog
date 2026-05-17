@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .select('role')
         .eq('id', user.id)
-        .maybeSingle()) as any;
+        .maybeSingle(), 5000, { data: null, error: null } as any) as any;
 
       if (error) {
         // If role doesn't exist or profile doesn't exist, just ignore

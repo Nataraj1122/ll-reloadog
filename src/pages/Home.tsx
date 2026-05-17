@@ -6,6 +6,7 @@ import { useSupabaseCategories, useSupabaseProducts } from '../hooks/useSupabase
 import { useAppContext } from '../context/AppContext';
 import { formatINR } from '../lib/utils';
 import { Product } from '../types';
+import { FALLBACK_IMAGE } from '../lib/supabase';
 import { ProductSkeleton, CategorySkeleton } from '../components/Skeleton';
 import ProductCard from '../components/ProductCard';
 import DataErrorState from '../components/DataErrorState';
@@ -134,8 +135,9 @@ export default function Home() {
                     <Link to={`/category/${category.id}`} className="group flex flex-col items-center">
                       <div className="aspect-square w-full rounded-full bg-brand-sand mb-3 md:mb-6 relative overflow-hidden border border-zinc-50 group-hover:shadow-xl transition-shadow duration-500">
                         <img 
-                          src={category.image} 
+                          src={category.image || FALLBACK_IMAGE} 
                           alt={category.name} 
+                          onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                         />
                       </div>
@@ -302,9 +304,21 @@ export default function Home() {
               {/* Reuse Detailed View Content from before or keep simplified as requested */}
               <div className="flex-1 bg-brand-sand overflow-y-auto scrollbar-none">
                  <div className="grid grid-cols-1 gap-1">
-                    {selectedProduct.images.length > 0 && selectedProduct.images.map((img, idx) => (
-                       <img key={`home-modal-img-${selectedProduct.id}-${idx}`} src={img} alt={`${selectedProduct.name}-${idx}`} className="w-full h-screen object-cover" />
-                    ))}
+                    {selectedProduct.images.length > 0 ? selectedProduct.images.map((img, idx) => (
+                      <img 
+                        key={`home-modal-img-${selectedProduct.id}-${idx}`} 
+                        src={img || FALLBACK_IMAGE} 
+                        alt={`${selectedProduct.name}-${idx}`} 
+                        onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
+                        className="w-full h-screen object-cover" 
+                      />
+                    )) : (
+                      <img 
+                        src={FALLBACK_IMAGE} 
+                        alt={selectedProduct.name} 
+                        className="w-full h-screen object-cover" 
+                      />
+                    )}
                  </div>
               </div>
               <div className="flex-1 p-8 md:p-16 lg:p-24 flex flex-col justify-center overflow-y-auto scrollbar-none bg-white">

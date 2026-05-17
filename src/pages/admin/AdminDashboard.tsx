@@ -21,21 +21,21 @@ export default function AdminDashboard() {
              // Fetch non-cancelled orders for sales and count
              const { data: ordersData, error: ordersError } = await withTimeout(supabase
                .from('orders')
-               .select('total_price, status')) as any;
+               .select('total_price, status'), 8000, { data: [], error: null } as any) as any;
              
              if (ordersError) throw ordersError;
 
              // Fetch customers count from profiles
              const { count: customersCount, error: profilesError } = await withTimeout(supabase
                .from('profiles')
-               .select('*', { count: 'exact', head: true })) as any;
+               .select('*', { count: 'exact', head: true }), 8000, { count: 0, error: null } as any) as any;
              
              if (profilesError) throw profilesError;
 
              // Fetch products count
              const { count: productsCount, error: productsError } = await withTimeout(supabase
                .from('products')
-               .select('*', { count: 'exact', head: true })) as any;
+               .select('*', { count: 'exact', head: true }), 8000, { count: 0, error: null } as any) as any;
              
              if (productsError) throw productsError;
 

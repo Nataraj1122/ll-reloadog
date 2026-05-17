@@ -24,21 +24,33 @@ export const supabase = createClient(
   supabaseAnonKey || DEFAULT_KEY
 )
 
+export const FALLBACK_IMAGE = "https://placehold.co/600x800?text=RELOAD";
+
 /**
  * Helper to wrap promises with a timeout
  */
-export async function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, timeoutMs = 8000): Promise<T> {
+export async function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, timeoutMs = 8000, fallbackValue?: T): Promise<T> {
   let timeoutId: any;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
+      if (fallbackValue !== undefined) {
+        // Resolve with fallback if provided
+        // We use a small delay to ensure race picks it up after timeout
+        // (Though race will prioritize whichever comes first)
+      }
       reject(new Error(`Operation timed out after ${timeoutMs}ms`));
     }, timeoutMs);
   });
 
   try {
-    // Cast to any to avoid complex Promise vs PromiseLike conflicts in race
     const result = await Promise.race([promise as any, timeoutPromise]);
     return result as T;
+  } catch (err: any) {
+    if (err.message?.includes('timed out') && fallbackValue !== undefined) {
+      console.warn(`Timeout reached, returning fallback value:`, fallbackValue);
+      return fallbackValue;
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }

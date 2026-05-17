@@ -18,7 +18,7 @@ export default function AdminOrders() {
       const { data, error } = await withTimeout(supabase
         .from('orders')
         .select('*')
-        .order('created_at', { ascending: false })) as any;
+        .order('created_at', { ascending: false }), 10000, { data: [], error: null } as any) as any;
 
       if (error) throw error;
 

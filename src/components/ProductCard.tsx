@@ -4,6 +4,7 @@ import { Heart, X } from 'lucide-react';
 import { formatINR } from '../lib/utils';
 import { Product } from '../types';
 import { useAppContext } from '../context/AppContext';
+import { FALLBACK_IMAGE } from '../lib/supabase';
 
 interface ProductCardProps {
   product: Product;
@@ -14,6 +15,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [selectedSize, setSelectedSize] = useState('M');
   const [isLoaded, setIsLoaded] = useState(false);
   const [showSizes, setShowSizes] = useState(false);
+
+  const primaryImage = product.images && product.images.length > 0 && product.images[0] ? product.images[0] : FALLBACK_IMAGE;
 
   return (
     <motion.div 
@@ -28,12 +31,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <div className="absolute inset-0 bg-zinc-200 animate-pulse" />
         )}
         <motion.img 
-          src={product.images && product.images.length > 0 ? product.images[0] : "https://via.placeholder.com/400x500?text=No+Image"} 
+          src={primaryImage} 
           alt={product.name} 
           loading="lazy"
           onLoad={() => setIsLoaded(true)}
           onError={(e) => {
-             e.currentTarget.src = "https://via.placeholder.com/400x500?text=Image+Error";
+             e.currentTarget.src = FALLBACK_IMAGE;
              setIsLoaded(true);
           }}
           className={`w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}

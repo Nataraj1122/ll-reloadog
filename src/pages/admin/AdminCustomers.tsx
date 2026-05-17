@@ -23,7 +23,7 @@ export default function AdminCustomers() {
       const { data: profileData, error: profileError } = await withTimeout(supabase
         .from('profiles')
         .select('*')
-        .order('created_at', { ascending: false })) as any;
+        .order('created_at', { ascending: false }), 8000, { data: [], error: null } as any) as any;
 
       if (profileError) throw profileError;
 
@@ -31,7 +31,7 @@ export default function AdminCustomers() {
       const { data: orderData, error: orderError } = await withTimeout(supabase
         .from('orders')
         .select('*')
-        .order('created_at', { ascending: false })) as any;
+        .order('created_at', { ascending: false }), 10000, { data: [], error: null } as any) as any;
 
       if (orderError) throw orderError;
 

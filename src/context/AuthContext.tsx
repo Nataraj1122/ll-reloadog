@@ -91,7 +91,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
@@ -104,19 +103,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setIsAdmin(false);
       }
-      setLoading(false);
+      
+      // Only set loading to false if it's currently true, 
+      // preventing potential race conditions causing stuck loads
+      setLoading(currentLoading => {
+        if (currentLoading) {
+            console.log("[AuthContext] onAuthStateChange resolved initial load.");
+            return false;
+        }
+        return currentLoading;
+      });
     });
 
     // Initial session check
     const authTimeout = setTimeout(() => {
-      setLoading(currentLoading => {
-        if (currentLoading) {
-          console.warn("[AuthContext] Session check timeout (10s). Forcing loading back to false.");
-          return false;
-        }
-        return currentLoading;
-      });
-    }, 10000);
+      console.warn("[AuthContext] Session check timeout (5s). Forcing loading back to false.");
+      setLoading(false);
+    }, 5000);
 
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
@@ -127,14 +130,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(user);
         
         if (user) {
-          withTimeout(checkAdminStatus(user), 5000).catch(err => {
-            console.error("[AuthContext] Admin check failed or timed out:", err);
+          Promise.all([
+            withTimeout(checkAdminStatus(user), 3000),
+            withTimeout(syncAccount(user), 3000)
+          ]).catch(err => {
+            console.error("[AuthContext] Admin/Sync failed or timed out:", err);
+          }).finally(() => {
+             setLoading(false);
           });
-          withTimeout(syncAccount(user), 5000).catch(err => {
-            console.error("[AuthContext] Sync account failed or timed out:", err);
-          });
+        } else {
+            setLoading(false);
         }
-        setLoading(false);
       })
       .catch(err => {
         clearTimeout(authTimeout);

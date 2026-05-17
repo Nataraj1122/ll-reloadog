@@ -95,7 +95,7 @@ export default function Layout() {
         const { data: exactData, error: exactError } = await supabase
           .from('products')
           .select('*')
-          .eq('product_code', searchQuery.toUpperCase())
+          .ilike('product_code', searchQuery)
           .eq('is_active', true)
           .limit(1);
 
@@ -364,7 +364,7 @@ export default function Layout() {
                   type="text" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="SEARCH OUR COLLECTIONS..." 
+                  placeholder="Search products or code..." 
                   className="w-full bg-transparent border-b-2 border-zinc-200 py-6 text-2xl md:text-5xl font-serif text-black placeholder:text-zinc-200 focus:outline-none focus:border-black transition-colors"
                 />
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-4">
@@ -507,16 +507,16 @@ export default function Layout() {
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-1">
                           <h3 className="text-sm font-semibold uppercase tracking-wider pr-4">{item.name}</h3>
-                          <button onClick={() => removeFromBag(item.cartItemId)} className="text-zinc-400 hover:text-red-500 transition-colors">
-                            <Trash2 size={16} />
+                          <button onClick={() => removeFromBag(item.cartItemId)} className="text-zinc-400 hover:text-red-500 transition-colors p-2 -mr-2">
+                            <Trash2 size={18} />
                           </button>
                         </div>
                         <p className="text-zinc-500 text-xs mb-4">Size: {item.size}</p>
                         <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-4 text-xs font-medium border border-zinc-200">
-                            <button className="py-2 px-3 hover:bg-zinc-50" onClick={() => updateQuantity(item.cartItemId, -1)}><Minus size={12} /></button>
-                            <span className="w-4 text-center">{item.quantity}</span>
-                            <button className="py-2 px-3 hover:bg-zinc-50" onClick={() => updateQuantity(item.cartItemId, 1)}><Plus size={12} /></button>
+                          <div className="flex items-center gap-2 text-xs font-medium border border-zinc-200">
+                            <button className="p-3 hover:bg-zinc-50 active:bg-zinc-100" onClick={() => updateQuantity(item.cartItemId, -1)}><Minus size={14} /></button>
+                            <span className="w-6 text-center font-bold">{item.quantity}</span>
+                            <button className="p-3 hover:bg-zinc-50 active:bg-zinc-100" onClick={() => updateQuantity(item.cartItemId, 1)}><Plus size={14} /></button>
                           </div>
                           <span className="text-sm font-medium">{formatINR(item.price * item.quantity)}</span>
                         </div>

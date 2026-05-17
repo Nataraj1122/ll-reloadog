@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase, withTimeout } from '../../lib/supabase';
+import { supabase, withTimeout, FALLBACK_IMAGE } from '../../lib/supabase';
 import { useSupabaseCategories, useSupabaseProducts } from '../../hooks/useSupabaseData';
 import { Product } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -170,18 +170,18 @@ export default function AdminProducts() {
         const { error } = await withTimeout(supabase
           .from('products')
           .update(productData)
-          .eq('id', editingProduct.id)) as any;
+          .eq('id', editingProduct.id), 15000) as any;
         if (error) throw error;
       } else {
         const { error } = await withTimeout(supabase
           .from('products')
-          .insert([productData])) as any;
+          .insert([productData]), 15000) as any;
         if (error) throw error;
       }
       
       alert('Product saved successfully!');
       setIsModalOpen(false);
-      window.location.reload();
+      refetchProducts();
     } catch (err: any) {
        console.error('Error saving product:', err);
        alert(`Error saving product: ${err.message}`);

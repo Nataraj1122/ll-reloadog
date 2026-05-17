@@ -15,6 +15,7 @@ export interface Product {
   sizes: string[];
   isTrending: boolean;
   isNewArrival: boolean;
+  isActive: boolean;
   productCode?: string;
 }
 

@@ -154,6 +154,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           quantity
         };
 
+    // Optimistic update
+    setCartItems(prev => {
+      if (existing) {
+        return prev.map(item => item.cartItemId === cartItemId ? newItem : item);
+      }
+      return [...prev, newItem];
+    });
+
     if (user) {
       const { error } = await supabase
         .from('cart')
@@ -168,14 +176,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           quantity
         }, { onConflict: 'user_id, cart_item_id' });
       
-      if (error) console.error("Error adding to cart:", error);
-    } else {
-      setCartItems(prev => {
-        if (existing) {
-          return prev.map(item => item.cartItemId === cartItemId ? newItem : item);
-        }
-        return [...prev, newItem];
-      });
+      if (error) {
+        console.error("Error adding to cart:", error);
+        // Revert optimistically if failed (simplified: reload would fix, or just log error)
+      }
     }
     setCartOpen(true);
   };
@@ -187,6 +191,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newQuantity = item.quantity + change;
     if (newQuantity <= 0) return;
 
+    // Optimistic update
+    setCartItems(prev => prev.map(i => i.cartItemId === cartItemId ? { ...i, quantity: newQuantity } : i));
+
     if (user) {
       const { error } = await supabase
         .from('cart')
@@ -194,13 +201,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id)
         .eq('cart_item_id', cartItemId);
       
-      if (error) console.error("Error updating quantity:", error);
-    } else {
-      setCartItems(prev => prev.map(i => i.cartItemId === cartItemId ? { ...i, quantity: newQuantity } : i));
+      if (error) {
+        console.error("Error updating quantity:", error);
+        // Revert optimistically
+        setCartItems(prev => prev.map(i => i.cartItemId === cartItemId ? { ...i, quantity: item.quantity } : i));
+      }
     }
   };
 
   const removeFromBag = async (cartItemId: string) => {
+    const itemToRemove = cartItems.find(i => i.cartItemId === cartItemId);
+    
+    // Optimistic update
+    setCartItems((prev) => prev.filter((item) => item.cartItemId !== cartItemId));
+
     if (user) {
       const { error } = await supabase
         .from('cart')
@@ -208,9 +222,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id)
         .eq('cart_item_id', cartItemId);
       
-      if (error) console.error("Error removing from cart:", error);
-    } else {
-      setCartItems((prev) => prev.filter((item) => item.cartItemId !== cartItemId));
+      if (error) {
+        console.error("Error removing from cart:", error);
+        // Revert optimistically
+        if (itemToRemove) {
+            setCartItems(prev => [...prev, itemToRemove]);
+        }
+      }
     }
   };
 

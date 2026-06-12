@@ -143,6 +143,7 @@ export default function CheckoutPage() {
       }
 
       // Call notification service for email/whatsapp
+      console.log("[CHECKOUT] Triggering NotificationService.notifyNewOrder for:", orderNumber);
       const notificationResult = await NotificationService.notifyNewOrder({
          order_number: orderNumber,
          customer_name: customerName,
@@ -152,6 +153,7 @@ export default function CheckoutPage() {
          shipping_address: fullAddress,
          items: itemsData
       });
+      console.log("[CHECKOUT] NotificationService result:", notificationResult);
       
       setNotified(notificationResult as any);
       

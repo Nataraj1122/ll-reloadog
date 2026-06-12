@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { Resend } from "resend";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -12,6 +13,11 @@ const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// Initialize Supabase Admin for logging
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://hnhyyucdpnjzepbvsldy.supabase.co";
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuaHl5dWNkcG5qemVwYnZzbGR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5Njk0MjYsImV4cCI6MjA5MzU0NTQyNn0._W6FNTVBQQdaEVjDtENezy3D6qZ2nufmP4iuxjrpznA";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -23,16 +29,29 @@ if (!process.env.RESEND_API_KEY) {
 }
 
 /**
- * Helper to log detailed email sending information as requested.
+ * Helper to log detailed email sending information to console and DB.
  */
-const logEmailInfo = (label: string, info: any, sender: string, recipient: string) => {
-  console.log(`-------------------------------------------------`);
-  console.log(`[EMAIL LOG: ${label}]`);
-  console.log(`Sender: ${sender}`);
-  console.log(`Recipient: ${recipient}`);
-  console.log(`Delivery ID: ${info?.id || 'N/A'}`);
-  console.log(`Full Response:`, JSON.stringify(info, null, 2));
-  console.log(`-------------------------------------------------`);
+const logEmailStep = async (orderNumber: string, email: string, status: string, error?: string, info?: any) => {
+  console.log(`[EMAIL STEP] Order: ${orderNumber} | Recipient: ${email} | Status: ${status}`);
+  if (error) console.error(`[EMAIL ERROR] Details: ${error}`);
+  if (info) console.log(`[RESEND RESPONSE]`, JSON.stringify(info, null, 2));
+
+  try {
+    const { error: logError } = await supabase.from('email_logs').insert([{
+      order_number: orderNumber,
+      customer_email: email,
+      status: status,
+      error_message: error || null,
+      metadata: info || null,
+      created_at: new Date().toISOString()
+    }]);
+    
+    if (logError) {
+      console.warn("[DB LOGGING FAILED] Could not write to email_logs table:", logError.message);
+    }
+  } catch (err) {
+    console.warn("[DB LOGGING CRASHED] Error during log insertion:", err);
+  }
 };
 
 /**
@@ -40,8 +59,11 @@ const logEmailInfo = (label: string, info: any, sender: string, recipient: strin
  */
 app.post("/api/test-email", async (req, res) => {
   const testTarget = "reloadwebsite172@gmail.com";
-  const sender = "onboarding@resend.dev"; // Default Resend sender if no domain verified
+  const sender = "onboarding@resend.dev";
+  const testOrderNumber = "TEST-" + Date.now();
+  
   console.log(`[Test Email] Initiating test to ${testTarget}`);
+  await logEmailStep(testOrderNumber, testTarget, 'attempted');
   
   try {
     const { data, error } = await resend.emails.send({
@@ -54,10 +76,11 @@ app.post("/api/test-email", async (req, res) => {
     
     if (error) throw error;
 
-    logEmailInfo("Test Route", data, sender, testTarget);
+    await logEmailStep(testOrderNumber, testTarget, 'sent', undefined, data);
     res.json({ success: true, deliveryId: data?.id, response: data });
   } catch (err: any) {
     console.error("EMAIL ERROR (Test Route):", err.message);
+    await logEmailStep(testOrderNumber, testTarget, 'failed', err.message);
     res.status(500).json({ 
       success: false, 
       error: err.message, 
@@ -68,11 +91,10 @@ app.post("/api/test-email", async (req, res) => {
 
 // Notifications API handler function
 const handleOrderEmail = async (req, res) => {
-  try {
-    console.log("[SERVER] Received notification request:", req.url, "Method:", req.method);
-    console.log("[SERVER] Payload:", JSON.stringify(req.body, null, 2));
+  const { order_number, customer_name, customer_email, phone_number, total_amount, shipping_address, items, type, status } = req.body;
 
-    const { order_number, customer_name, customer_email, phone_number, total_amount, shipping_address, items, type, status } = req.body;
+  try {
+    console.log("[SERVER] Received notification request for:", order_number, "Type:", type);
     
     if (!customer_email) {
       console.warn("[API ERROR] Missing customer_email in request body");
@@ -80,10 +102,11 @@ const handleOrderEmail = async (req, res) => {
     }
 
     const adminEmail = "reloadwebsite172@gmail.com"; 
-    const defaultSender = "onboarding@resend.dev"; // Resend allows testing from this address
+    const defaultSender = "onboarding@resend.dev"; 
 
     if (type === 'new_order') {
-        console.log(`[Notification] Processing NEW ORDER: ${order_number} for CUSTOMER: ${customer_email}`);
+        // Log Attempt - Customer
+        await logEmailStep(order_number, customer_email, 'attempted (Customer Confirmation)');
 
         // 1. Email to Customer
         try {
@@ -107,13 +130,17 @@ const handleOrderEmail = async (req, res) => {
             `
           });
           
-          if (error) throw error;
-          logEmailInfo("Customer Confirmation", data, defaultSender, customer_email);
+          if (error) {
+            await logEmailStep(order_number, customer_email, 'failed (Customer Confirmation)', error.message, error);
+            throw error;
+          }
+          await logEmailStep(order_number, customer_email, 'sent (Customer Confirmation)', undefined, data);
         } catch (err: any) {
           console.error("FAILURE: Error sending Customer email:", err.message);
         }
 
         // 2. Email to Admin
+        await logEmailStep(order_number, adminEmail, 'attempted (Admin Alert)');
         try {
           const { data, error } = await resend.emails.send({
             from: `Store System <${defaultSender}>`,
@@ -133,13 +160,16 @@ Check admin dashboard for details.
             `,
           });
           
-          if (error) throw error;
-          logEmailInfo("Admin Alert", data, defaultSender, adminEmail);
+          if (error) {
+            await logEmailStep(order_number, adminEmail, 'failed (Admin Alert)', error.message, error);
+            throw error;
+          }
+          await logEmailStep(order_number, adminEmail, 'sent (Admin Alert)', undefined, data);
         } catch (err: any) {
           console.error("FAILURE: Error sending Admin email:", err.message);
         }
     } else if (type === 'status_update') {
-        console.log(`[Notification] Processing STATUS UPDATE for: ${order_number} to ${status}`);
+        await logEmailStep(order_number, customer_email, `attempted (Status: ${status})`);
         try {
           const { data, error } = await resend.emails.send({
             from: `Reload Store <${defaultSender}>`,
@@ -148,8 +178,11 @@ Check admin dashboard for details.
             text: `Hi ${customer_name},\n\nYour order ${order_number} status has been updated to: ${status}.\n\nBest,\nReload Store Team`
           });
           
-          if (error) throw error;
-          logEmailInfo("Status Update", data, defaultSender, customer_email);
+          if (error) {
+            await logEmailStep(order_number, customer_email, `failed (Status: ${status})`, error.message, error);
+            throw error;
+          }
+          await logEmailStep(order_number, customer_email, `sent (Status: ${status})`, undefined, data);
         } catch (err: any) {
           console.error("FAILURE: Error sending status update email:", err.message);
         }

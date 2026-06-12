@@ -226,7 +226,7 @@ export function useSupabaseProducts(limit = 20, page = 1) {
             images: transformedImages,
             description: p.description || '',
             stock: p.stock_quantity || p.stock || 0,
-            sizes: Array.isArray(p.sizes) ? p.sizes : (typeof p.sizes === 'string' ? p.sizes.split(',').map((s:string)=>s.trim()) : ['S', 'M', 'L', 'XL']),
+            sizes: Array.from(new Set((Array.isArray(p.sizes) ? p.sizes : (typeof p.sizes === 'string' ? p.sizes.split(',').map((s:string)=>s.trim()) : ['S', 'M', 'L', 'XL'])).filter(Boolean))),
             isTrending: trending,
             isNewArrival: newArr,
             isActive: active,
@@ -234,9 +234,18 @@ export function useSupabaseProducts(limit = 20, page = 1) {
           };
         });
         
-        console.log(`[useSupabaseProducts] Successfully mapped ${mappedProducts.length} items.`);
-        setProducts(mappedProducts);
-        sessionStorage.setItem('cached_products', JSON.stringify(mappedProducts));
+        // Deduplicate products based on ID
+        const uniqueProductsMap = new Map();
+        mappedProducts.forEach(p => {
+          if (!uniqueProductsMap.has(p.id)) {
+            uniqueProductsMap.set(p.id, p);
+          }
+        });
+        const uniqueProducts = Array.from(uniqueProductsMap.values());
+        
+        console.log(`[useSupabaseProducts] Successfully mapped ${uniqueProducts.length} items.`);
+        setProducts(uniqueProducts);
+        sessionStorage.setItem('cached_products', JSON.stringify(uniqueProducts));
       } catch (mapErr) {
         console.error("[useSupabaseProducts] Mapping failed:", mapErr);
       }

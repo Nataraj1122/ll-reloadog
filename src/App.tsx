@@ -22,6 +22,7 @@ import AdminCategories from './pages/admin/AdminCategories';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminCustomers from './pages/admin/AdminCustomers';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
+import AdminNotifications from './pages/admin/AdminNotifications';
 import AdminLogin from './pages/admin/AdminLogin';
 
 import ErrorBoundary from './components/ErrorBoundary';
@@ -54,6 +55,7 @@ function App() {
                 <Route path="orders" element={<AdminOrders />} />
                 <Route path="customers" element={<AdminCustomers />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
+                <Route path="notifications" element={<AdminNotifications />} />
               </Route>
               
               <Route path="*" element={<Navigate to="/" replace />} />

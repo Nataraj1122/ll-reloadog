@@ -84,6 +84,8 @@ export default function CheckoutPage() {
     console.log("Attempting to place order with Supabase...", { userId: user.id, itemsCount: cartItems.length });
 
     try {
+      const orderNumber = `RLD-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
+      
       const itemsData = cartItems.map(item => ({
         productId: item.id,
         productName: item.name,
@@ -93,19 +95,23 @@ export default function CheckoutPage() {
         imageUrl: item.image || 'https://via.placeholder.com/150?text=No+Image'
       }));
 
+      const customerName = `${formData.firstName} ${formData.lastName}`;
+      const fullAddress = `${formData.address}, ${formData.city}, ${formData.state}`;
+
       // SEND TO SUPABASE
       const { data: supabaseData, error: supabaseError } = await supabase
         .from('orders')
         .insert([
           {
             user_id: user.id,
-            customer_name: `${formData.firstName} ${formData.lastName}`,
+            order_number: orderNumber,
+            customer_name: customerName,
             customer_email: formData.email,
             phone_number: formData.phone,
-            shipping_address: `${formData.address}, ${formData.city}, ${formData.state}`,
+            shipping_address: fullAddress,
             zip_code: formData.zipCode,
             items: itemsData,
-            total_price: cartSubtotal, // Changed from totalAmount to total_price as per sql schema
+            total_price: cartSubtotal, 
             payment_method: 'COD',
             status: 'pending',
             created_at: new Date().toISOString()
@@ -117,8 +123,44 @@ export default function CheckoutPage() {
       if (supabaseError) throw supabaseError;
       
       console.log("Order saved to Supabase successfully!", supabaseData);
+
+      // Save notification to Supabase (graceful fail if table doesn't exist yet)
+      const { error: notificationError } = await supabase.from('notifications').insert([{
+        order_id: supabaseData.id,
+        order_number: orderNumber,
+        customer_name: customerName,
+        customer_email: formData.email,
+        phone_number: formData.phone,
+        total_amount: cartSubtotal,
+        message: `New order placed by ${customerName}`,
+        type: 'new_order'
+      }]);
       
-      setOrderId(supabaseData.id);
+      if (notificationError) {
+        console.warn("Could not save notification to Supabase. Did you run the setup SQL?", notificationError);
+      }
+
+      // Call API for email/whatsapp
+      try {
+        await fetch('/api/notifications/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+             order_number: orderNumber,
+             customer_name: customerName,
+             customer_email: formData.email,
+             phone_number: formData.phone,
+             total_amount: cartSubtotal,
+             shipping_address: fullAddress,
+             items: itemsData,
+             type: 'new_order'
+          })
+        });
+      } catch (apiErr) {
+        console.warn("Failed to send external notifications via API", apiErr);
+      }
+      
+      setOrderId(orderNumber);
       await clearCart();
       setSuccess(true);
       
@@ -132,6 +174,11 @@ export default function CheckoutPage() {
   };
 
   if (success) {
+    const today = new Date();
+    const deliveryDate = new Date(today);
+    deliveryDate.setDate(today.getDate() + 4);
+    const formattedDate = deliveryDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
     return (
       <div className="min-h-screen pt-32 pb-24 bg-white">
         <div className="max-w-xl mx-auto px-6 text-center">
@@ -152,7 +199,7 @@ export default function CheckoutPage() {
                 <Truck size={14} />
                 <span>Estimated Delivery</span>
               </div>
-              <p className="text-sm">Wednesday, Oct 25 - Friday, Oct 27</p>
+              <p className="text-sm">{formattedDate}</p>
             </div>
 
             <Link to="/" className="btn-primary w-full py-5 text-center">Continue Shopping</Link>
@@ -294,8 +341,8 @@ export default function CheckoutPage() {
               <h2 className="text-2xl font-serif mb-8 border-b border-zinc-200 pb-4">Order Summary</h2>
               
               <div className="max-h-[300px] overflow-y-auto pr-4 mb-8 space-y-6 scrollbar-none">
-                {cartItems.map((item) => (
-                  <div key={`checkout-summary-${item.cartItemId}`} className="flex gap-4">
+                {cartItems.map((item, idx) => (
+                  <div key={`checkout-summary-${item.cartItemId}-${idx}`} className="flex gap-4">
                     <div className="w-20 aspect-[3/4] bg-zinc-200 shrink-0">
                       <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                     </div>

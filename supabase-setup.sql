@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS wishlist (
 CREATE TABLE IF NOT EXISTS orders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  order_number VARCHAR(50),
   customer_name VARCHAR(255) NOT NULL,
   customer_email VARCHAR(255) NOT NULL,
   phone_number VARCHAR(50),
@@ -78,6 +79,20 @@ CREATE TABLE IF NOT EXISTS order_items (
   image_url TEXT
 );
 
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+  order_number VARCHAR(50) NOT NULL,
+  customer_name VARCHAR(255) NOT NULL,
+  customer_email VARCHAR(255) NOT NULL,
+  phone_number VARCHAR(50),
+  total_amount DECIMAL(10, 2) NOT NULL,
+  message TEXT,
+  is_read BOOLEAN DEFAULT FALSE,
+  type VARCHAR(50) DEFAULT 'new_order',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 2. Enable Row Level Security (RLS)
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
@@ -86,6 +101,7 @@ ALTER TABLE cart ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wishlist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- 3. Drop existing policies
 DO $$
@@ -116,6 +132,8 @@ BEGIN
   DROP POLICY IF EXISTS "Admins have full access to products" ON products;
   DROP POLICY IF EXISTS "Admins have full access to orders" ON orders;
   DROP POLICY IF EXISTS "Admins have full access to order_items" ON order_items;
+  DROP POLICY IF EXISTS "Admins have full access to notifications" ON notifications;
+  DROP POLICY IF EXISTS "Users can insert notifications" ON notifications;
 END $$;
 
 -- 4. Re-create RLS Policies
@@ -151,4 +169,7 @@ CREATE POLICY "Admins have full access to categories" ON categories FOR ALL USIN
 CREATE POLICY "Admins have full access to products" ON products FOR ALL USING (auth.jwt()->>'email' = 'varunrathodv@gmail.com');
 CREATE POLICY "Admins have full access to orders" ON orders FOR ALL USING (auth.jwt()->>'email' = 'varunrathodv@gmail.com');
 CREATE POLICY "Admins have full access to order_items" ON order_items FOR ALL USING (auth.jwt()->>'email' = 'varunrathodv@gmail.com');
+CREATE POLICY "Admins have full access to notifications" ON notifications FOR ALL USING (auth.jwt()->>'email' = 'varunrathodv@gmail.com');
+
+CREATE POLICY "Users can insert notifications" ON notifications FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 

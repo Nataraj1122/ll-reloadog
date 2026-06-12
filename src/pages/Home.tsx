@@ -343,9 +343,9 @@ export default function Home() {
                   <div className="mb-12">
                     <span className="text-[10px] uppercase tracking-widest font-bold mb-6 block">Size Selection</span>
                     <div className="flex flex-wrap gap-4">
-                      {['S', 'M', 'L', 'XL', '2XL'].map((s) => (
+                      {['S', 'M', 'L', 'XL', '2XL'].map((s, i) => (
                         <button 
-                          key={`home-size-opt-${s}`} 
+                          key={`home-size-opt-${s}-${i}`} 
                           onClick={() => setSelectedSize(s)}
                           className={`w-14 h-14 border flex items-center justify-center text-[11px] font-bold transition-all ${selectedSize === s ? 'border-black bg-black text-white' : 'border-zinc-200 hover:border-black'}`}
                         >

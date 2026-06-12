@@ -38,6 +38,7 @@ export default function MyOrders() {
 
         const ords: Order[] = Array.from(new Map<string, Order>((data || []).map(o => [o.id, {
           id: o.id,
+          orderNumber: o.order_number,
           userId: o.user_id,
           customerName: o.customer_name,
           customerEmail: o.customer_email,
@@ -187,7 +188,7 @@ export default function MyOrders() {
                       <div>
                         <div className="flex items-center gap-3 mb-1">
                           <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Order ID</span>
-                          <span className="text-xs font-mono font-bold tracking-wider">#{order.id?.slice(-8).toUpperCase() || 'UNKNOWN'}</span>
+                          <span className="text-xs font-mono font-bold tracking-wider">{order.orderNumber || `#${order.id?.slice(-8).toUpperCase() || 'UNKNOWN'}`}</span>
                         </div>
                         <div className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">
                           {order.createdAt?.toDate ? (

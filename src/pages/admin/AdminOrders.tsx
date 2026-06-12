@@ -24,6 +24,7 @@ export default function AdminOrders() {
 
       const formattedOrders: Order[] = Array.from(new Map<string, Order>(data ? data.map((ord: OrderTable) => [ord.id, {
         id: ord.id,
+        orderNumber: (ord as any).order_number,
         userId: ord.user_id,
         customerName: ord.customer_name,
         customerEmail: ord.customer_email,
@@ -100,6 +101,37 @@ export default function AdminOrders() {
         .eq('id', id)) as any;
 
       if (error) throw error;
+      
+      const updatedOrder = orders.find(o => o.id === id);
+      if (updatedOrder) {
+        try {
+          fetch('/api/notifications/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order_number: (updatedOrder as any).order_number || id.slice(-8).toUpperCase(),
+              customer_name: updatedOrder.customerName,
+              customer_email: updatedOrder.customerEmail,
+              type: 'status_update',
+              status: newStatus.toLowerCase()
+            })
+          });
+
+          await supabase.from('notifications').insert([{
+             order_id: updatedOrder.id,
+             order_number: (updatedOrder as any).order_number || id.slice(-8).toUpperCase(),
+             customer_name: updatedOrder.customerName,
+             customer_email: updatedOrder.customerEmail,
+             phone_number: updatedOrder.phoneNumber,
+             total_amount: updatedOrder.totalAmount,
+             message: `Order status updated to ${newStatus}`,
+             type: 'status_update'
+          }]);
+        } catch (err) {
+          console.warn("Failed to create sub-notifications", err);
+        }
+      }
+
       fetchOrders(); // Refresh local state
     } catch (err: any) {
       console.error("Update status error:", err);
@@ -197,7 +229,7 @@ export default function AdminOrders() {
                  <React.Fragment key={`admin-order-fragment-${order.id}`}>
                    <tr className={`border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 ${expandedId === order.id ? 'bg-zinc-50' : ''}`}>
                      <td className="px-6 py-6">
-                        <div className="font-mono text-xs text-zinc-400 mb-1">#{order.id.slice(-8).toUpperCase()}</div>
+                        <div className="font-mono text-xs text-zinc-400 mb-1">{order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`}</div>
                         <div className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">
                            {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + order.createdAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : 'N/A'}
                         </div>

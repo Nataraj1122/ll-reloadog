@@ -98,9 +98,9 @@ const ProductCard = React.memo(({ product }: ProductCardProps) => {
                    </button>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {product.sizes.map((s) => (
+                  {product.sizes.map((s, idx) => (
                     <button 
-                      key={`quick-size-${s}`}
+                      key={`quick-size-${s}-${idx}`}
                       onClick={(e) => {
                         e.preventDefault();
                         addToBag(product, s);

@@ -386,9 +386,9 @@ export default function Layout() {
                   </h4>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {searchResults.map((product) => (
+                    {searchResults.map((product, idx) => (
                       <motion.div
-                        key={`search-result-${product.id}`}
+                        key={`search-result-${product.id}-${idx}`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="group"
@@ -499,8 +499,8 @@ export default function Layout() {
                     <p className="text-sm uppercase tracking-widest font-semibold">Your bag is empty</p>
                   </div>
                 ) : (
-                  cartItems.map((item) => (
-                    <div key={`cart-drawer-item-${item.cartItemId}`} className="flex gap-6 mb-8 pb-8 border-b border-zinc-100">
+                  cartItems.map((item, idx) => (
+                    <div key={`cart-drawer-item-${item.cartItemId}-${idx}`} className="flex gap-6 mb-8 pb-8 border-b border-zinc-100">
                       <div className="w-24 aspect-[3/4] bg-zinc-100 shrink-0">
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       </div>

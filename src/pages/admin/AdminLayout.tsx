@@ -1,18 +1,53 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Settings, Tag, ShoppingBag, ShoppingCart, Users, BarChart3, LogOut } from 'lucide-react';
+import { Settings, Tag, ShoppingBag, ShoppingCart, Users, BarChart3, LogOut, Bell } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAdmin, loading, logout } = useAuth();
+  
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) {
       navigate('/admin/login');
     }
   }, [user, isAdmin, loading, navigate]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      // Fetch initial unread count
+      const fetchUnread = async () => {
+        const { count, error } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_read', false);
+        if (!error && count !== null) {
+          setUnreadCount(count);
+        }
+      };
+      fetchUnread();
+
+      // Subscribe to real-time changes
+      const channel = supabase.channel('schema-db-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications' },
+          (payload) => {
+            console.log('Notification change received!', payload);
+            fetchUnread(); // Simplest way to ensure accurate count
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      }
+    }
+  }, [isAdmin]);
 
   if (loading) {
      return <div className="min-h-screen flex justify-center items-center font-serif text-lg text-zinc-500">Loading Admin...</div>;
@@ -28,7 +63,21 @@ export default function AdminLayout() {
     { name: 'Categories', path: '/admin/categories', icon: <Tag size={18} /> },
     { name: 'Orders', path: '/admin/orders', icon: <ShoppingCart size={18} /> },
     { name: 'Customers', path: '/admin/customers', icon: <Users size={18} /> },
-    { name: 'Analytics', path: '/admin/analytics', icon: <BarChart3 size={18} /> }
+    { name: 'Analytics', path: '/admin/analytics', icon: <BarChart3 size={18} /> },
+    { 
+      name: 'Notifications', 
+      path: '/admin/notifications', 
+      icon: (
+        <div className="relative">
+          <Bell size={18} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full min-w-[14px] text-center">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </div>
+      ) 
+    }
   ];
 
   return (

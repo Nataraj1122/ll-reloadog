@@ -102,29 +102,45 @@ export default function CheckoutPage() {
       const customerName = `${formData.firstName} ${formData.lastName}`;
       const fullAddress = `${formData.address}, ${formData.city}, ${formData.state}`;
 
+      const orderPayload = {
+        user_id: user.id,
+        order_number: orderNumber,
+        customer_name: customerName,
+        customer_email: formData.email,
+        phone_number: formData.phone,
+        shipping_address: fullAddress,
+        zip_code: formData.zipCode,
+        items: itemsData,
+        total_price: cartSubtotal, 
+        payment_method: 'COD',
+        status: 'pending',
+        created_at: new Date().toISOString()
+      };
+
+      console.log("[TRACE: SUPABASE] Sending Payload:", orderPayload);
+
       // SEND TO SUPABASE
-      const { data: supabaseData, error: supabaseError } = await supabase
+      const supabaseResponse = await supabase
         .from('orders')
-        .insert([
-          {
-            user_id: user.id,
-            order_number: orderNumber,
-            customer_name: customerName,
-            customer_email: formData.email,
-            phone_number: formData.phone,
-            shipping_address: fullAddress,
-            zip_code: formData.zipCode,
-            items: itemsData,
-            total_price: cartSubtotal, 
-            payment_method: 'COD',
-            status: 'pending',
-            created_at: new Date().toISOString()
-          }
-        ])
+        .insert([orderPayload])
         .select()
         .single();
 
-      if (supabaseError) throw supabaseError;
+      const { data: supabaseData, error: supabaseError, status, statusText } = supabaseResponse;
+
+      console.log("[TRACE: SUPABASE] Response Received:", {
+        data: supabaseData,
+        error: supabaseError,
+        status,
+        statusText
+      });
+
+      if (supabaseError) {
+        console.error("[TRACE: SUPABASE ERROR]", supabaseError);
+        const errDetail = `Status: ${status} | Text: ${statusText} | Msg: ${supabaseError.message} | Code: ${supabaseError.code}`;
+        if (typeof window !== 'undefined') alert("SUPABASE INSERT FAILED:\n" + errDetail);
+        throw new Error(errDetail);
+      }
       
       console.log("ALERT: STEP 2");
       if (typeof window !== 'undefined') alert("ALERT: STEP 2");

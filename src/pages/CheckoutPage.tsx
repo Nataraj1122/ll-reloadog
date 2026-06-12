@@ -83,11 +83,7 @@ export default function CheckoutPage() {
     }
 
     setLoading(true);
-    console.log("ALERT: STEP 1");
-    if (typeof window !== 'undefined') alert("ALERT: STEP 1");
     
-    console.log("Attempting to place order with Supabase...", { userId: user.id, itemsCount: cartItems.length });
-
     try {
       const orderNumber = `RLD-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
       
@@ -127,11 +123,6 @@ export default function CheckoutPage() {
 
       if (supabaseError) throw supabaseError;
       
-      console.log("ALERT: STEP 2");
-      if (typeof window !== 'undefined') alert("ALERT: STEP 2");
-
-      console.log("Order saved to Supabase successfully!", supabaseData);
-
       // Save notification to Supabase (graceful fail if table doesn't exist yet)
       const { error: notificationError } = await supabase.from('notifications').insert([{
         order_id: supabaseData.id,
@@ -145,34 +136,22 @@ export default function CheckoutPage() {
       }]);
       
       if (notificationError) {
-        console.warn("Could not save notification to Supabase. Did you run the setup SQL?", notificationError);
+        console.warn("Could not save notification to Supabase.", notificationError);
       }
 
-      console.log("ALERT: STEP 3");
-      if (typeof window !== 'undefined') alert("ALERT: STEP 3");
-
-      // TRACING: Alert to confirm execution reach
-      if (typeof window !== 'undefined') {
-        alert("NOTIFICATION FUNCTION STARTED for Order: " + orderNumber);
-      }
-
-      console.log("[CHECKOUT] Starting Notification Flow for:", orderNumber);
-      
       // TRACING: Direct insert into email_logs from client to verify visibility
       try {
         await supabase.from('email_logs').insert([{
           order_number: orderNumber,
           customer_email: formData.email,
-          status: 'client_triggered',
+          status: 'order_confirmed_client',
           created_at: new Date().toISOString()
         }]);
-        console.log("[CHECKOUT] Client-side trace log inserted into email_logs");
       } catch (logErr) {
         console.warn("[CHECKOUT] Client-side logging failed", logErr);
       }
 
       // Call notification service for email/whatsapp
-      console.log("[CHECKOUT] Triggering NotificationService.notifyNewOrder for:", orderNumber);
       const notificationResult = await NotificationService.notifyNewOrder({
          order_number: orderNumber,
          customer_name: customerName,
@@ -182,7 +161,6 @@ export default function CheckoutPage() {
          shipping_address: fullAddress,
          items: itemsData
       });
-      console.log("[CHECKOUT] NotificationService result:", notificationResult);
       
       setNotified(notificationResult as any);
       
@@ -190,10 +168,10 @@ export default function CheckoutPage() {
       await clearCart();
       setSuccess(true);
       
-      // navigate('/my-orders'); // Handled by success state now
     } catch (error: any) {
-      console.error("Error during Supabase order placement:", error);
-      setOrderError(`Failed to place order: ${error.message || 'Unknown error'}`);
+      console.error("Error during order placement:", error);
+      const errorMessage = error.message || JSON.stringify(error);
+      setOrderError(`Failed to place order: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -221,21 +199,30 @@ export default function CheckoutPage() {
             
             {/* Notification Status */}
             <div className={`mt-4 mb-8 px-4 py-3 rounded-sm text-xs font-medium border ${
-              notified?.success 
-                ? 'bg-zinc-50 border-zinc-100 text-zinc-600' 
-                : 'bg-red-50 border-red-100 text-red-600'
+              !notified 
+                ? 'bg-zinc-50 border-zinc-100 text-zinc-400'
+                : notified?.success 
+                  ? 'bg-zinc-50 border-zinc-100 text-zinc-600' 
+                  : 'bg-red-50 border-red-100 text-red-600'
             }`}>
-              {notified?.success 
-                ? `Confirmation sent to ${formData.email}` 
-                : <div>
-                    <p className="font-bold mb-1">Notification Error:</p>
-                    <p className="opacity-80">{(notified as any)?.error?.message || notified?.message || 'Technical error occurred'}</p>
-                    {(notified as any)?.error?.details && (
-                      <p className="mt-2 font-mono text-[9px] truncate">{(notified as any).error.details}</p>
-                    )}
-                  </div>
-              }
-              {!notified && <span className="animate-pulse">Sending confirmation...</span>}
+              {!notified ? (
+                <div className="flex items-center justify-center gap-2">
+                  <span className="w-2 h-2 bg-zinc-400 rounded-full animate-pulse" />
+                  <span>Preparing order confirmation...</span>
+                </div>
+              ) : notified.success ? (
+                `Confirmation sent successfully to ${formData.email}`
+              ) : (
+                <div>
+                  <p className="font-bold mb-1">Email Notification Error:</p>
+                  <p className="opacity-90">{notified.message || 'Technical error'}</p>
+                  {(notified as any).error?.details && (
+                    <div className="mt-2 text-left p-2 bg-black/5 rounded font-mono text-[9px] break-all max-h-20 overflow-auto">
+                      {(notified as any).error.details}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="w-full bg-zinc-50 p-6 rounded-lg text-left mb-12 border border-zinc-100">

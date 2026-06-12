@@ -91,10 +91,16 @@ app.post("/api/test-email", async (req, res) => {
 
 // Notifications API handler function
 const handleOrderEmail = async (req, res) => {
+  console.log("-----------------------------------------");
+  console.log("SERVER API HIT: /api/send-order-email");
+  console.log("Method:", req.method);
+  console.log("Headers:", JSON.stringify(req.headers, null, 2));
+  
   const { order_number, customer_name, customer_email, phone_number, total_amount, shipping_address, items, type, status } = req.body;
 
   try {
     console.log("[SERVER] Received notification request for:", order_number, "Type:", type);
+    console.log("[SERVER] Payload Summary:", { customer_email, type, order_number });
     
     if (!customer_email) {
       console.warn("[API ERROR] Missing customer_email in request body");
@@ -102,10 +108,13 @@ const handleOrderEmail = async (req, res) => {
     }
 
     // IMMEDIATE TRACING: Prove the server function is executing
+    console.log("[SERVER] Attempting DB Trace Log...");
     await logEmailStep(order_number || 'UNKNOWN', customer_email, `server_reached (${type})`);
+    console.log("[SERVER] DB Trace Log Finished.");
 
     if (!process.env.RESEND_API_KEY) {
-      const msg = "MISSING RESEND_API_KEY on server";
+      const msg = "MISSING RESEND_API_KEY on server environment variables";
+      console.error("[SERVER]", msg);
       await logEmailStep(order_number || 'UNKNOWN', customer_email, 'failed', msg);
       return res.status(500).json({ error: msg });
     }

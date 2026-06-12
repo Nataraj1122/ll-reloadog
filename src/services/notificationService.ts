@@ -24,15 +24,9 @@ export class NotificationService {
    * This calls the backend API which handles the secure SMTP and WhatsApp logic.
    */
   static async notifyNewOrder(data: OrderNotificationData) {
-    console.log("ALERT: STEP 4");
-    if (typeof window !== 'undefined') alert("ALERT: STEP 4");
-
     console.log(`[NotificationService] Triggering new order notification for ${data.order_number}`);
     
     try {
-      console.log("ALERT: STEP 5");
-      if (typeof window !== 'undefined') alert("ALERT: STEP 5");
-
       // 1. Trigger Backend API for Email/WhatsApp
       const response = await fetch(this.API_URL, {
         method: 'POST',
@@ -40,18 +34,33 @@ export class NotificationService {
         body: JSON.stringify({ ...data, type: 'new_order' })
       });
       
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || result.message || `Failed to send notifications (HTTP ${response.status})`);
+      console.log(`[NotificationService] API Status: ${response.status} ${response.statusText}`);
+      
+      let result;
+      const text = await response.text();
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        console.error("[NotificationService] API returned non-JSON response:", text);
+        throw new Error(`Server returned invalid response (HTTP ${response.status}): ${text.slice(0, 100)}...`);
+      }
 
+      if (!response.ok) {
+        console.error("[NotificationService] API Error:", result);
+        throw new Error(result.error || result.message || `Failed to send notifications (HTTP ${response.status})`);
+      }
+
+      console.log("[NotificationService] API Success:", result);
       return { success: true };
     } catch (error: any) {
-      console.error('[NotificationService] Error:', error);
+      console.error('[NotificationService] Caught Exception:', error);
       return { 
         success: false, 
         message: error.message,
         error: {
           message: error.message,
-          details: error.toString()
+          details: error.toString(),
+          stack: error.stack
         } 
       };
     }

@@ -101,6 +101,15 @@ const handleOrderEmail = async (req, res) => {
       return res.status(400).json({ error: "customer_email is required" });
     }
 
+    // IMMEDIATE TRACING: Prove the server function is executing
+    await logEmailStep(order_number || 'UNKNOWN', customer_email, `server_reached (${type})`);
+
+    if (!process.env.RESEND_API_KEY) {
+      const msg = "MISSING RESEND_API_KEY on server";
+      await logEmailStep(order_number || 'UNKNOWN', customer_email, 'failed', msg);
+      return res.status(500).json({ error: msg });
+    }
+
     const adminEmail = "reloadwebsite172@gmail.com"; 
     const defaultSender = "onboarding@resend.dev"; 
 

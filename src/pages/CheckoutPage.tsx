@@ -83,6 +83,9 @@ export default function CheckoutPage() {
     }
 
     setLoading(true);
+    console.log("ALERT: STEP 1");
+    if (typeof window !== 'undefined') alert("ALERT: STEP 1");
+    
     console.log("Attempting to place order with Supabase...", { userId: user.id, itemsCount: cartItems.length });
 
     try {
@@ -124,6 +127,9 @@ export default function CheckoutPage() {
 
       if (supabaseError) throw supabaseError;
       
+      console.log("ALERT: STEP 2");
+      if (typeof window !== 'undefined') alert("ALERT: STEP 2");
+
       console.log("Order saved to Supabase successfully!", supabaseData);
 
       // Save notification to Supabase (graceful fail if table doesn't exist yet)
@@ -140,6 +146,29 @@ export default function CheckoutPage() {
       
       if (notificationError) {
         console.warn("Could not save notification to Supabase. Did you run the setup SQL?", notificationError);
+      }
+
+      console.log("ALERT: STEP 3");
+      if (typeof window !== 'undefined') alert("ALERT: STEP 3");
+
+      // TRACING: Alert to confirm execution reach
+      if (typeof window !== 'undefined') {
+        alert("NOTIFICATION FUNCTION STARTED for Order: " + orderNumber);
+      }
+
+      console.log("[CHECKOUT] Starting Notification Flow for:", orderNumber);
+      
+      // TRACING: Direct insert into email_logs from client to verify visibility
+      try {
+        await supabase.from('email_logs').insert([{
+          order_number: orderNumber,
+          customer_email: formData.email,
+          status: 'client_triggered',
+          created_at: new Date().toISOString()
+        }]);
+        console.log("[CHECKOUT] Client-side trace log inserted into email_logs");
+      } catch (logErr) {
+        console.warn("[CHECKOUT] Client-side logging failed", logErr);
       }
 
       // Call notification service for email/whatsapp
@@ -198,7 +227,13 @@ export default function CheckoutPage() {
             }`}>
               {notified?.success 
                 ? `Confirmation sent to ${formData.email}` 
-                : `Notification failed: ${notified?.message || 'Technical error'}`
+                : <div>
+                    <p className="font-bold mb-1">Notification Error:</p>
+                    <p className="opacity-80">{(notified as any)?.error?.message || notified?.message || 'Technical error occurred'}</p>
+                    {(notified as any)?.error?.details && (
+                      <p className="mt-2 font-mono text-[9px] truncate">{(notified as any).error.details}</p>
+                    )}
+                  </div>
               }
               {!notified && <span className="animate-pulse">Sending confirmation...</span>}
             </div>

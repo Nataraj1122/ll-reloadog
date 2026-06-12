@@ -53,6 +53,11 @@ export default async function handler(req: any, res: any) {
         });
         if (customerResult.error) {
           await logEmailStep(order_number, customer_email, 'failed_customer', customerResult.error.message, customerResult.error);
+          return res.status(500).json({ 
+            success: false, 
+            error: customerResult.error.message,
+            code: (customerResult.error as any).code || 'RESEND_ERROR'
+          });
         } else {
           await logEmailStep(order_number, customer_email, 'sent_customer', undefined, customerResult.data);
         }

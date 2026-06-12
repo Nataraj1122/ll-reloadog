@@ -14,6 +14,15 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
+// 1. ADD PING ROUTE
+app.get("/api/ping", (req, res) => {
+  console.log("[TRACE] API Ping Hit");
+  res.status(200).json({
+    success: true,
+    message: "API working"
+  });
+});
+
 // Initialize Supabase Admin for logging
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://hnhyyucdpnjzepbvsldy.supabase.co";
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuaHl5dWNkcG5qemVwYnZzbGR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5Njk0MjYsImV4cCI6MjA5MzU0NTQyNn0._W6FNTVBQQdaEVjDtENezy3D6qZ2nufmP4iuxjrpznA";
@@ -92,25 +101,43 @@ app.post("/api/test-email", async (req, res) => {
 // Notifications API handler function
 const handleOrderEmail = async (req, res) => {
   console.log("-----------------------------------------");
-  console.log("SERVER API HIT: /api/send-order-email");
-  console.log("Method:", req.method);
-  console.log("Headers:", JSON.stringify(req.headers, null, 2));
+  console.log("[TRACE: BACKEND] STEP 1: API Route Entry hit /api/send-order-email");
+  console.log("[TRACE: BACKEND] Method:", req.method);
   
   const { order_number, customer_name, customer_email, phone_number, total_amount, shipping_address, items, type, status } = req.body;
 
   try {
-    console.log("[SERVER] Received notification request for:", order_number, "Type:", type);
-    console.log("[SERVER] Payload Summary:", { customer_email, type, order_number });
+    console.log("[TRACE: BACKEND] STEP 2: Body Parsed", { order_number, customer_email, type });
     
     if (!customer_email) {
-      console.warn("[API ERROR] Missing customer_email in request body");
-      return res.status(400).json({ error: "customer_email is required" });
+      console.warn("[TRACE: BACKEND ERROR] Missing customer_email in body");
+      return res.status(400).json({ 
+        success: false, 
+        error: "customer_email is required",
+        received_body: req.body 
+      });
     }
 
     // IMMEDIATE TRACING: Prove the server function is executing
-    console.log("[SERVER] Attempting DB Trace Log...");
-    await logEmailStep(order_number || 'UNKNOWN', customer_email, `server_reached (${type})`);
-    console.log("[SERVER] DB Trace Log Finished.");
+    console.log("[TRACE: BACKEND] STEP 3: Attempting first Supabase insert to email_logs...");
+    const traceLog = {
+      order_number: order_number || 'UNKNOWN',
+      customer_email: customer_email,
+      status: `server_reached_${type}`,
+      created_at: new Date().toISOString(),
+      metadata: { body: req.body }
+    };
+
+    try {
+      const { error: dbErr } = await supabase.from('email_logs').insert([traceLog]);
+      if (dbErr) {
+        console.error("[TRACE: BACKEND ERROR] Supabase rejected initial log:", dbErr.message);
+      } else {
+        console.log("[TRACE: BACKEND] STEP 4: Initial log insert successful");
+      }
+    } catch (crashErr: any) {
+      console.error("[TRACE: BACKEND ERROR] Supabase client crashed during initial log:", crashErr.message);
+    }
 
     if (!process.env.RESEND_API_KEY) {
       const msg = "MISSING RESEND_API_KEY on server environment variables";
@@ -127,44 +154,42 @@ const handleOrderEmail = async (req, res) => {
         await logEmailStep(order_number, customer_email, 'attempted (Customer Confirmation)');
 
         // 1. Email to Customer
-        try {
-          const { data, error } = await resend.emails.send({
-            from: `Reload Store <${defaultSender}>`,
-            to: customer_email,
-            subject: `Order Confirmation - ${order_number}`,
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
-                <h2 style="color: #000;">Thank you for your order, ${customer_name}!</h2>
-                <p>We've received your order and are processing it now.</p>
-                <div style="background: #f9f9f9; padding: 15px; margin: 20px 0;">
-                  <p><strong>Order Number:</strong> ${order_number}</p>
-                  <p><strong>Total Amount:</strong> Rs. ${total_amount}</p>
-                  <p><strong>Shipping Address:</strong> ${shipping_address}</p>
-                </div>
-                <p>We'll notify you as soon as your items ship.</p>
-                <hr />
-                <p style="font-size: 12px; color: #888;">Reload Store • Premium Experience</p>
+        const { data, error } = await resend.emails.send({
+          from: `Reload Store <${defaultSender}>`,
+          to: customer_email,
+          subject: `Order Confirmation - ${order_number}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+              <h2 style="color: #000;">Thank you for your order, ${customer_name}!</h2>
+              <p>We've received your order and are processing it now.</p>
+              <div style="background: #f9f9f9; padding: 15px; margin: 20px 0;">
+                <p><strong>Order Number:</strong> ${order_number}</p>
+                <p><strong>Total Amount:</strong> Rs. ${total_amount}</p>
+                <p><strong>Shipping Address:</strong> ${shipping_address}</p>
               </div>
-            `
+              <p>We'll notify you as soon as your items ship.</p>
+              <hr />
+              <p style="font-size: 12px; color: #888;">Reload Store • Premium Experience</p>
+            </div>
+          `
+        });
+        
+        if (error) {
+          await logEmailStep(order_number, customer_email, 'failed (Customer Confirmation)', error.message, error);
+          return res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            message: "Resend failed to send customer email. This often happens in test mode if the recipient is not verified."
           });
-          
-          if (error) {
-            await logEmailStep(order_number, customer_email, 'failed (Customer Confirmation)', error.message, error);
-            throw error;
-          }
-          await logEmailStep(order_number, customer_email, 'sent (Customer Confirmation)', undefined, data);
-        } catch (err: any) {
-          console.error("FAILURE: Error sending Customer email:", err.message);
         }
+        await logEmailStep(order_number, customer_email, 'sent (Customer Confirmation)', undefined, data);
 
         // 2. Email to Admin
-        await logEmailStep(order_number, adminEmail, 'attempted (Admin Alert)');
-        try {
-          const { data, error } = await resend.emails.send({
-            from: `Store System <${defaultSender}>`,
-            to: adminEmail,
-            subject: `NEW ORDER ALERT - ${order_number}`,
-            text: `
+        const { data: adminData, error: adminError } = await resend.emails.send({
+          from: `Store System <${defaultSender}>`,
+          to: adminEmail,
+          subject: `NEW ORDER ALERT - ${order_number}`,
+          text: `
 NEW ORDER ALERT
 -------------------------------
 Order Number: ${order_number}
@@ -175,16 +200,14 @@ Total: Rs. ${total_amount}
 Address: ${shipping_address}
 -------------------------------
 Check admin dashboard for details.
-            `,
-          });
-          
-          if (error) {
-            await logEmailStep(order_number, adminEmail, 'failed (Admin Alert)', error.message, error);
-            throw error;
-          }
-          await logEmailStep(order_number, adminEmail, 'sent (Admin Alert)', undefined, data);
-        } catch (err: any) {
-          console.error("FAILURE: Error sending Admin email:", err.message);
+          `,
+        });
+        
+        if (adminError) {
+          await logEmailStep(order_number, adminEmail, 'failed (Admin Alert)', adminError.message, adminError);
+          // Don't fail the whole request if only admin alert fails
+        } else {
+          await logEmailStep(order_number, adminEmail, 'sent (Admin Alert)', undefined, adminData);
         }
     } else if (type === 'status_update') {
         await logEmailStep(order_number, customer_email, `attempted (Status: ${status})`);

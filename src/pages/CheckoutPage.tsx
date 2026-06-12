@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../lib/utils';
-import { ShoppingBag, ChevronRight, CheckCircle2, Truck, CreditCard } from 'lucide-react';
+import { ShoppingBag, ChevronRight, CheckCircle2, Truck, CreditCard, MessageCircle, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../services/notificationService';
 
@@ -87,6 +87,9 @@ export default function CheckoutPage() {
     try {
       const orderNumber = `RLD-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
       
+      console.log("ALERT: STEP 1");
+      if (typeof window !== 'undefined') alert("ALERT: STEP 1");
+
       const itemsData = cartItems.map(item => ({
         productId: item.id,
         productName: item.name,
@@ -123,6 +126,9 @@ export default function CheckoutPage() {
 
       if (supabaseError) throw supabaseError;
       
+      console.log("ALERT: STEP 2");
+      if (typeof window !== 'undefined') alert("ALERT: STEP 2");
+
       // Save notification to Supabase (graceful fail if table doesn't exist yet)
       const { error: notificationError } = await supabase.from('notifications').insert([{
         order_id: supabaseData.id,
@@ -137,6 +143,19 @@ export default function CheckoutPage() {
       
       if (notificationError) {
         console.warn("Could not save notification to Supabase.", notificationError);
+      }
+
+      console.log("ALERT: STEP 3");
+      if (typeof window !== 'undefined') alert("ALERT: STEP 3");
+
+      // PING CHECK
+      try {
+        console.log("[CHECKOUT] Verifying API availability...");
+        const pingReq = await fetch('/api/ping');
+        const pingRes = await pingReq.json();
+        console.log("[CHECKOUT] Ping Result:", pingRes);
+      } catch (pErr) {
+        console.warn("[CHECKOUT] Ping failed", pErr);
       }
 
       // TRACING: Direct insert into email_logs from client to verify visibility
@@ -183,6 +202,10 @@ export default function CheckoutPage() {
     deliveryDate.setDate(today.getDate() + 4);
     const formattedDate = deliveryDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
+    const adminPhone = import.meta.env.VITE_ADMIN_PHONE || '919999999999';
+    const whatsappMessage = encodeURIComponent(`Hi, I just placed an order on Reload Store!\n\nOrder ID: ${orderId}\nCustomer: ${formData.firstName} ${formData.lastName}\nTotal: ${formatINR(cartSubtotal)}\n\nPlease confirm my order. Thanks!`);
+    const whatsappUrl = `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${whatsappMessage}`;
+
     return (
       <div className="min-h-screen pt-32 pb-24 bg-white">
         <div className="max-w-xl mx-auto px-6 text-center">
@@ -195,10 +218,10 @@ export default function CheckoutPage() {
               <CheckCircle2 size={40} className="text-white" />
             </div>
             <h1 className="text-4xl font-serif mb-4">Order Confirmed</h1>
-            <p className="text-zinc-500 mb-2">Thank you for your purchase. Your order <span className="font-mono text-black">#{orderId.slice(-8).toUpperCase()}</span> has been placed successfully.</p>
+            <p className="text-zinc-500 mb-2">Thank you for your purchase. Your order <span className="font-mono text-black font-bold">#{orderId.slice(-8).toUpperCase()}</span> has been placed.</p>
             
             {/* Notification Status */}
-            <div className={`mt-4 mb-8 px-4 py-3 rounded-sm text-xs font-medium border ${
+            <div className={`mt-4 mb-4 w-full px-4 py-4 rounded-sm text-xs border ${
               !notified 
                 ? 'bg-zinc-50 border-zinc-100 text-zinc-400'
                 : notified?.success 
@@ -208,32 +231,64 @@ export default function CheckoutPage() {
               {!notified ? (
                 <div className="flex items-center justify-center gap-2">
                   <span className="w-2 h-2 bg-zinc-400 rounded-full animate-pulse" />
-                  <span>Preparing order confirmation...</span>
+                  <span>Processing order confirmation...</span>
                 </div>
               ) : notified.success ? (
-                `Confirmation sent successfully to ${formData.email}`
+                <div className="flex items-center justify-center gap-2">
+                  <CheckCircle2 size={14} className="text-green-600" />
+                  <span>Confirmation email sent to <strong>{formData.email}</strong></span>
+                </div>
               ) : (
-                <div>
-                  <p className="font-bold mb-1">Email Notification Error:</p>
-                  <p className="opacity-90">{notified.message || 'Technical error'}</p>
-                  {(notified as any).error?.details && (
-                    <div className="mt-2 text-left p-2 bg-black/5 rounded font-mono text-[9px] break-all max-h-20 overflow-auto">
-                      {(notified as any).error.details}
-                    </div>
-                  )}
+                <div className="text-left">
+                  <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-widest text-[9px]">
+                    <span className="bg-red-600 text-white px-1.5 py-0.5 rounded-sm">Notice</span>
+                    <span>Email Delivery Delay</span>
+                  </div>
+                  <p className="opacity-90 leading-relaxed mb-2">We couldn't deliver the confirmation email to <strong>{formData.email}</strong>. This often happens if the email address is not verified in our test system.</p>
+                  <p className="font-bold text-black border-t border-red-200 mt-2 pt-2">Please notify us on WhatsApp to confirm your order immediately.</p>
                 </div>
               )}
             </div>
+
+            {/* WhatsApp Integration */}
+            <div className="w-full mb-12">
+              <a 
+                href={whatsappUrl} 
+                target="_blank" 
+                rel="noreferrer"
+                className="flex items-center justify-between w-full p-5 bg-[#25D366] hover:bg-[#20bd5c] text-white rounded-lg transition-all group shadow-lg shadow-green-100"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="bg-white/20 p-2 rounded-full">
+                    <MessageCircle size={24} fill="currentColor" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-sm uppercase tracking-wider">Confirm on WhatsApp</p>
+                    <p className="text-[10px] opacity-90">Send order details to our team</p>
+                  </div>
+                </div>
+                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </a>
+            </div>
             
-            <div className="w-full bg-zinc-50 p-6 rounded-lg text-left mb-12 border border-zinc-100">
-              <div className="flex items-center gap-3 mb-4 text-xs uppercase tracking-widest font-bold">
-                <Truck size={14} />
-                <span>Estimated Delivery</span>
+            <div className="w-full grid grid-cols-2 gap-4 mb-12">
+              <div className="bg-zinc-50 p-6 rounded-lg text-left border border-zinc-100">
+                <div className="flex items-center gap-3 mb-2 text-[9px] uppercase tracking-widest font-bold text-zinc-400">
+                  <Truck size={12} />
+                  <span>Estimated Delivery</span>
+                </div>
+                <p className="text-sm font-medium">{formattedDate}</p>
               </div>
-              <p className="text-sm">{formattedDate}</p>
+              <div className="bg-zinc-50 p-6 rounded-lg text-left border border-zinc-100">
+                <div className="flex items-center gap-3 mb-2 text-[9px] uppercase tracking-widest font-bold text-zinc-400">
+                  <CreditCard size={12} />
+                  <span>Payment</span>
+                </div>
+                <p className="text-sm font-medium">Cash on Delivery</p>
+              </div>
             </div>
 
-            <Link to="/" className="btn-primary w-full py-5 text-center">Continue Shopping</Link>
+            <Link to="/" className="btn-primary w-full py-5 text-center">Back to Store</Link>
           </motion.div>
         </div>
       </div>

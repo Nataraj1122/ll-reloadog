@@ -24,36 +24,38 @@ export class NotificationService {
    * This calls the backend API which handles the secure SMTP and WhatsApp logic.
    */
   static async notifyNewOrder(data: OrderNotificationData) {
-    console.log(`[NotificationService] Triggering new order notification for ${data.order_number}`);
+    console.log("[TRACE: FRONTEND] 1. NotificationService.notifyNewOrder called for:", data.order_number);
+    console.log("[TRACE: FRONTEND] 2. Targeting URL:", this.API_URL);
     
     try {
       // 1. Trigger Backend API for Email/WhatsApp
+      console.log("[TRACE: FRONTEND] 3. Initiating Fetch request...");
       const response = await fetch(this.API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, type: 'new_order' })
       });
       
-      console.log(`[NotificationService] API Status: ${response.status} ${response.statusText}`);
+      console.log(`[TRACE: FRONTEND] 4. Response Status: ${response.status} ${response.statusText}`);
       
       let result;
       const text = await response.text();
+      console.log("[TRACE: FRONTEND] 5. Response raw text:", text);
+
       try {
         result = JSON.parse(text);
       } catch (e) {
-        console.error("[NotificationService] API returned non-JSON response:", text);
-        throw new Error(`Server returned invalid response (HTTP ${response.status}): ${text.slice(0, 100)}...`);
+        throw new Error(`Invalid JSON from server (HTTP ${response.status}): ${text.slice(0, 50)}`);
       }
 
       if (!response.ok) {
-        console.error("[NotificationService] API Error:", result);
-        throw new Error(result.error || result.message || `Failed to send notifications (HTTP ${response.status})`);
+        throw new Error(result.error || result.message || `API Error (HTTP ${response.status})`);
       }
 
-      console.log("[NotificationService] API Success:", result);
+      console.log("[TRACE: FRONTEND] 6. Success Result:", result);
       return { success: true };
     } catch (error: any) {
-      console.error('[NotificationService] Caught Exception:', error);
+      console.error('[TRACE: FRONTEND ERROR] Exception caught:', error);
       return { 
         success: false, 
         message: error.message,

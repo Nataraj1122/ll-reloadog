@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, withTimeout } from '../../lib/supabase';
 import { Order } from '../../types';
 import { OrderTable } from '../../supabase-types';
+import { NotificationService } from '../../services/notificationService';
 import { formatINR } from '../../lib/utils';
 import { ChevronDown, ChevronUp, Package, Clock, Truck, CheckCircle, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -105,21 +106,17 @@ export default function AdminOrders() {
       const updatedOrder = orders.find(o => o.id === id);
       if (updatedOrder) {
         try {
-          fetch('/api/notifications/order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              order_number: (updatedOrder as any).order_number || id.slice(-8).toUpperCase(),
-              customer_name: updatedOrder.customerName,
-              customer_email: updatedOrder.customerEmail,
-              type: 'status_update',
-              status: newStatus.toLowerCase()
-            })
+          // Use NotificationService for status updates
+          await NotificationService.notifyStatusUpdate({
+            order_number: (updatedOrder as any).orderNumber || id.slice(-8).toUpperCase(),
+            customer_name: updatedOrder.customerName,
+            customer_email: updatedOrder.customerEmail,
+            status: newStatus.toLowerCase()
           });
 
           await supabase.from('notifications').insert([{
              order_id: updatedOrder.id,
-             order_number: (updatedOrder as any).order_number || id.slice(-8).toUpperCase(),
+             order_number: (updatedOrder as any).orderNumber || id.slice(-8).toUpperCase(),
              customer_name: updatedOrder.customerName,
              customer_email: updatedOrder.customerEmail,
              phone_number: updatedOrder.phoneNumber,

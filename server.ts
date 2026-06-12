@@ -13,78 +13,95 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Set up Nodemailer transporter using Mailtrap or any SMTP you provide
+// Set up Nodemailer transporter
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.mailtrap.io",
-  port: parseInt(process.env.SMTP_PORT || "2525"),
+  service: 'gmail',
   auth: {
-    user: process.env.SMTP_USER || "test_user",
-    pass: process.env.SMTP_PASS || "test_pass",
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS?.replace(/\s+/g, ''), // Strip spaces if user pasted "abcd efgh ..."
   },
 });
 
+// Verify connection configuration
+if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error("[SMTP] Connection error:", error.message);
+      console.log("[SMTP] Tip: Ensure you are using a Google App Password, not your regular password.");
+    } else {
+      console.log("[SMTP] Server is ready to take our messages");
+    }
+  });
+} else {
+  console.warn("[SMTP] Warning: SMTP_USER or SMTP_PASS is missing in environment variables.");
+}
+
 // Notifications API
-app.post("/api/notifications/order", async (req, res) => {
+app.post("/api/send-order-email", async (req, res) => {
   try {
     const { order_number, customer_name, customer_email, phone_number, total_amount, shipping_address, items, type, status } = req.body;
+    const adminEmail = "reloadwebsite172@gmail.com"; // Requested specific admin email
 
     if (type === 'new_order') {
-        const adminEmail = process.env.ADMIN_EMAIL || "admin@example.com";
+        console.log(`[Notification] Processing new order: ${order_number}`);
 
-        // 1. WhatsApp API skeleton
-        // WhatsAppService.sendOrderMessage(phone_number, adminEmail, order_number);
-        console.log(`[WhatsApp Service] Mocking message send to: ${phone_number} for Order: ${order_number}`);
+        // 1. WhatsApp Mock
+        console.log(`[WhatsApp Service] Mocking message to: ${phone_number} | Admin: ${process.env.ADMIN_PHONE || '985936088'}`);
 
         // 2. Email to Customer
         try {
           await transporter.sendMail({
-            from: '"Store Demo" <no-reply@store.local>',
+            from: `"Reload Store" <${process.env.SMTP_USER}>`,
             to: customer_email,
             subject: `Order Confirmation - ${order_number}`,
-            text: `Hi ${customer_name},\n\nThank you for your order!\nOrder Details:\nOrder Number: ${order_number}\nTotal: ${total_amount}\n\nWe will notify you when your order ships.\n\nBest,\nStore Team`,
             html: `<h3>Thank you for your order, ${customer_name}!</h3>
                    <p><strong>Order Number:</strong> ${order_number}</p>
                    <p><strong>Total:</strong> Rs. ${total_amount}</p>
                    <p><strong>Shipping to:</strong> ${shipping_address}</p>
                    <p>We'll notify you when it ships.</p>`
           });
-          console.log(`[Email] Customer order confirmation sent to ${customer_email}`);
+          console.log("EMAIL SENT SUCCESSFULLY to Customer");
         } catch (err: any) {
-          console.error("[Email] Customer email error: ", err.message);
+          console.error("EMAIL ERROR (Customer):", err.message);
         }
 
         // 3. Email to Admin
         try {
           await transporter.sendMail({
-            from: '"Store System" <system@store.local>',
+            from: `"Store System" <${process.env.SMTP_USER}>`,
             to: adminEmail,
-            subject: `New Order Received - ${order_number}`,
-            text: `New order: ${order_number}\nCustomer: ${customer_name}\nTotal: Rs. ${total_amount}\nPhone: ${phone_number}\nAddress: ${shipping_address}`,
+            subject: `New Order Alert - ${order_number}`,
+            text: `New Alert!\nOrder Number: ${order_number}\nCustomer: ${customer_name}\nTotal: Rs. ${total_amount}\nPhone: ${phone_number}\nAddress: ${shipping_address}`,
           });
-          console.log(`[Email] Admin order notification sent to ${adminEmail}`);
+          console.log("EMAIL SENT SUCCESSFULLY to Admin");
         } catch (err: any) {
-          console.error("[Email] Admin email error: ", err.message);
+          console.error("EMAIL ERROR (Admin):", err.message);
         }
     } else if (type === 'status_update') {
-        // Send email/whatsapp on status update to customer
         try {
           await transporter.sendMail({
-            from: '"Store Demo" <no-reply@store.local>',
+            from: `"Reload Store" <${process.env.SMTP_USER}>`,
             to: customer_email,
-            subject: `Order Update - ${order_number}`,
-            text: `Hi ${customer_name},\n\nYour order ${order_number} status has been updated to: ${status}.\n\nBest,\nStore Team`
+            subject: `Order Updated - ${order_number}`,
+            text: `Hi ${customer_name},\n\nYour order ${order_number} status is now: ${status}.\n\nBest,\nReload Store Team`
           });
-          console.log(`[Email] Status update sent to ${customer_email}`);
+          console.log("EMAIL SENT SUCCESSFULLY (Status Update)");
         } catch (err: any) {
-          console.error("[Email] Status update email error: ", err.message);
+          console.error("EMAIL ERROR (Status):", err.message);
         }
     }
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error("Failed to process notification:", err);
-    res.status(500).json({ error: "Notification processing failed" });
+    console.error("CRITICAL NOTIFICATION FAILURE:", err.message);
+    res.status(500).json({ error: err.message });
   }
+});
+
+// Original endpoint alias for backward compatibility
+app.post("/api/notifications/order", (req, res) => {
+    // Redirect to the new handler or just call it
+    app._router.handle(req, res, () => {});
 });
 
 

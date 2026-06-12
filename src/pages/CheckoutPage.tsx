@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../lib/utils';
 import { ShoppingBag, ChevronRight, CheckCircle2, Truck, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { NotificationService } from '../services/notificationService';
 
 export default function CheckoutPage() {
   const { cartItems, cartSubtotal, clearCart } = useAppContext();
@@ -140,25 +141,16 @@ export default function CheckoutPage() {
         console.warn("Could not save notification to Supabase. Did you run the setup SQL?", notificationError);
       }
 
-      // Call API for email/whatsapp
-      try {
-        await fetch('/api/notifications/order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-             order_number: orderNumber,
-             customer_name: customerName,
-             customer_email: formData.email,
-             phone_number: formData.phone,
-             total_amount: cartSubtotal,
-             shipping_address: fullAddress,
-             items: itemsData,
-             type: 'new_order'
-          })
-        });
-      } catch (apiErr) {
-        console.warn("Failed to send external notifications via API", apiErr);
-      }
+      // Call notification service for email/whatsapp
+      await NotificationService.notifyNewOrder({
+         order_number: orderNumber,
+         customer_name: customerName,
+         customer_email: formData.email,
+         phone_number: formData.phone,
+         total_amount: cartSubtotal,
+         shipping_address: fullAddress,
+         items: itemsData
+      });
       
       setOrderId(orderNumber);
       await clearCart();

@@ -190,7 +190,7 @@ export default function CheckoutPage() {
     deliveryDate.setDate(today.getDate() + 4);
     const formattedDate = deliveryDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
-    const adminPhone = import.meta.env.VITE_ADMIN_PHONE || '919999999999';
+    const adminPhone = import.meta.env.VITE_ADMIN_PHONE || '919985936088';
     const whatsappMessage = encodeURIComponent(`Hi, I just placed an order on Reload Store!\n\nOrder ID: ${orderId}\nCustomer: ${formData.firstName} ${formData.lastName}\nTotal: ${formatINR(cartSubtotal)}\n\nPlease confirm my order. Thanks!`);
     const whatsappUrl = `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${whatsappMessage}`;
 

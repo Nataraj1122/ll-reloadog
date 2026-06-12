@@ -3,7 +3,7 @@ import path from "path";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 dotenv.config();
 
@@ -13,35 +13,13 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Set up Nodemailer transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS?.replace(/\s+/g, ''), // Strip spaces if user pasted "abcd efgh ..."
-  },
-  debug: true, // Enable debug output
-  logger: true // Log internal messages to console
-});
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verify connection configuration
-if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-  console.log(`[SMTP] Attempting to verify connection for user: ${process.env.SMTP_USER}`);
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error("[SMTP] CRITICAL: Connection verification failed!");
-      console.error("[SMTP] Error Message:", error.message);
-      console.error("[SMTP] Full Error Object:", JSON.stringify(error, null, 2));
-      console.log("[SMTP] Recommended Steps:");
-      console.log(" 1. Check if 'Less Secure Apps' is ON (not recommended) OR use an 'App Password'.");
-      console.log(" 2. Ensure SMTP_USER matches your Gmail exactly.");
-      console.log(" 3. Ensure SMTP_PASS is a 16-character App Password.");
-    } else {
-      console.log("[SMTP] SUCCESS: Server is ready to take our messages");
-    }
-  });
+if (!process.env.RESEND_API_KEY) {
+  console.error("[RESEND] ERROR: RESEND_API_KEY environment variable is missing!");
 } else {
-  console.error("[SMTP] ERROR: SMTP_USER or SMTP_PASS environment variables are missing!");
+  console.log("[RESEND] Client initialized");
 }
 
 /**
@@ -52,9 +30,7 @@ const logEmailInfo = (label: string, info: any, sender: string, recipient: strin
   console.log(`[EMAIL LOG: ${label}]`);
   console.log(`Sender: ${sender}`);
   console.log(`Recipient: ${recipient}`);
-  console.log(`MessageId: ${info.messageId}`);
-  console.log(`Accepted: ${JSON.stringify(info.accepted)}`);
-  console.log(`Rejected: ${JSON.stringify(info.rejected)}`);
+  console.log(`Delivery ID: ${info?.id || 'N/A'}`);
   console.log(`Full Response:`, JSON.stringify(info, null, 2));
   console.log(`-------------------------------------------------`);
 };
@@ -64,20 +40,22 @@ const logEmailInfo = (label: string, info: any, sender: string, recipient: strin
  */
 app.post("/api/test-email", async (req, res) => {
   const testTarget = "reloadwebsite172@gmail.com";
-  const sender = process.env.SMTP_USER || "unknown";
+  const sender = "onboarding@resend.dev"; // Default Resend sender if no domain verified
   console.log(`[Test Email] Initiating test to ${testTarget}`);
   
   try {
-    const info = await transporter.sendMail({
-      from: `"Reload Store Test" <${sender}>`,
+    const { data, error } = await resend.emails.send({
+      from: `Reload Store Test <${sender}>`,
       to: testTarget,
-      subject: "STMP Test Email",
-      text: "This is a test email to verify your SMTP configuration works correctly.",
-      html: "<h3>SMTP Configuration Test</h3><p>If you see this, your email server is working perfectly!</p>"
+      subject: "Resend Test Email",
+      text: "This is a test email to verify your Resend configuration works correctly.",
+      html: "<h3>Resend Configuration Test</h3><p>If you see this, your Resend integration is working perfectly!</p>"
     });
     
-    logEmailInfo("Test Route", info, sender, testTarget);
-    res.json({ success: true, messageId: info.messageId, response: info.response });
+    if (error) throw error;
+
+    logEmailInfo("Test Route", data, sender, testTarget);
+    res.json({ success: true, deliveryId: data?.id, response: data });
   } catch (err: any) {
     console.error("EMAIL ERROR (Test Route):", err.message);
     res.status(500).json({ 
@@ -102,15 +80,15 @@ const handleOrderEmail = async (req, res) => {
     }
 
     const adminEmail = "reloadwebsite172@gmail.com"; 
+    const defaultSender = "onboarding@resend.dev"; // Resend allows testing from this address
 
     if (type === 'new_order') {
         console.log(`[Notification] Processing NEW ORDER: ${order_number} for CUSTOMER: ${customer_email}`);
 
         // 1. Email to Customer
         try {
-          const sender = process.env.SMTP_USER || "unknown";
-          const info = await transporter.sendMail({
-            from: `"Reload Store" <${sender}>`,
+          const { data, error } = await resend.emails.send({
+            from: `Reload Store <${defaultSender}>`,
             to: customer_email,
             subject: `Order Confirmation - ${order_number}`,
             html: `
@@ -128,19 +106,17 @@ const handleOrderEmail = async (req, res) => {
               </div>
             `
           });
-          logEmailInfo("Customer Confirmation", info, sender, customer_email);
+          
+          if (error) throw error;
+          logEmailInfo("Customer Confirmation", data, defaultSender, customer_email);
         } catch (err: any) {
           console.error("FAILURE: Error sending Customer email:", err.message);
-          if (err.message.includes('auth') || err.message.includes('login')) {
-            console.error("[SMTP AUTH] Gmail authentication failed. Ensure you use an APP PASSWORD.");
-          }
         }
 
         // 2. Email to Admin
         try {
-          const sender = process.env.SMTP_USER || "unknown";
-          const info = await transporter.sendMail({
-            from: `"Store System" <${sender}>`,
+          const { data, error } = await resend.emails.send({
+            from: `Store System <${defaultSender}>`,
             to: adminEmail,
             subject: `NEW ORDER ALERT - ${order_number}`,
             text: `
@@ -156,21 +132,24 @@ Address: ${shipping_address}
 Check admin dashboard for details.
             `,
           });
-          logEmailInfo("Admin Alert", info, sender, adminEmail);
+          
+          if (error) throw error;
+          logEmailInfo("Admin Alert", data, defaultSender, adminEmail);
         } catch (err: any) {
           console.error("FAILURE: Error sending Admin email:", err.message);
         }
     } else if (type === 'status_update') {
         console.log(`[Notification] Processing STATUS UPDATE for: ${order_number} to ${status}`);
         try {
-          const sender = process.env.SMTP_USER || "unknown";
-          const info = await transporter.sendMail({
-            from: `"Reload Store" <${sender}>`,
+          const { data, error } = await resend.emails.send({
+            from: `Reload Store <${defaultSender}>`,
             to: customer_email,
             subject: `Order Update - ${order_number}`,
             text: `Hi ${customer_name},\n\nYour order ${order_number} status has been updated to: ${status}.\n\nBest,\nReload Store Team`
           });
-          logEmailInfo("Status Update", info, sender, customer_email);
+          
+          if (error) throw error;
+          logEmailInfo("Status Update", data, defaultSender, customer_email);
         } catch (err: any) {
           console.error("FAILURE: Error sending status update email:", err.message);
         }
@@ -193,7 +172,7 @@ app.get("/api/health", (req, res) => {
     status: "ok", 
     time: new Date().toISOString(),
     env: process.env.NODE_ENV,
-    smtpConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS)
+    resendConfigured: !!process.env.RESEND_API_KEY
   });
 });
 

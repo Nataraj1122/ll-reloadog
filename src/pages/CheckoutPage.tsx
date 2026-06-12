@@ -205,62 +205,61 @@ export default function CheckoutPage() {
             <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center mb-8">
               <CheckCircle2 size={40} className="text-white" />
             </div>
-            <h1 className="text-4xl font-serif mb-4">Order Confirmed</h1>
-            <p className="text-zinc-500 mb-2">Thank you for your purchase. Your order <span className="font-mono text-black font-bold">#{orderId.slice(-8).toUpperCase()}</span> has been placed.</p>
+            <h1 className="text-4xl font-serif mb-4">Order Received</h1>
+            <p className="text-zinc-500 mb-6 font-medium">Order <span className="font-mono text-black font-bold">#{orderId.slice(-8).toUpperCase()}</span> is being processed.</p>
             
-            {/* Notification Status */}
-            <div className={`mt-4 mb-4 w-full px-4 py-4 rounded-sm text-xs border ${
-              !notified 
-                ? 'bg-zinc-50 border-zinc-100 text-zinc-400'
-                : notified?.success 
-                  ? 'bg-zinc-50 border-zinc-100 text-zinc-600' 
-                  : 'bg-red-50 border-red-100 text-red-600'
-            }`}>
-              {!notified ? (
-                <div className="flex items-center justify-center gap-2">
-                  <span className="w-2 h-2 bg-zinc-400 rounded-full animate-pulse" />
-                  <span>Finalizing your order...</span>
-                </div>
-              ) : notified.success ? (
-                <div className="flex items-center justify-center gap-2">
-                  <CheckCircle2 size={14} className="text-green-600" />
-                  <span>Confirmation email sent to <strong>{formData.email}</strong></span>
-                </div>
-              ) : (
-                <div className="text-left">
-                  <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-widest text-[9px]">
-                    <span className="bg-red-600 text-white px-1.5 py-0.5 rounded-sm">Action Required</span>
-                    <span>Order Confirmation Delay</span>
-                  </div>
-                  <p className="opacity-90 leading-relaxed mb-2">We couldn't deliver the confirmation email to <strong>{formData.email}</strong>. This usually happens in testing mode when the email is not verified.</p>
-                  <p className="font-bold text-black border-t border-red-200 mt-2 pt-2">Please tap the WhatsApp button below to confirm your order immediately.</p>
-                </div>
-              )}
-            </div>
-
-            {/* WhatsApp Integration */}
-            <div className="w-full mb-12">
-              <div className="mb-4 text-left">
-                <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-400 mb-2">Instant Confirmation</h3>
-                <p className="text-xs text-zinc-500">Tap below to notify our team on WhatsApp for lightning-fast processing.</p>
+            {/* WhatsApp Integration - Primary Action */}
+            <div className="w-full mb-8">
+              <div className="mb-4 text-left px-1">
+                <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-900 mb-1">Instant WhatsApp Verification</h3>
+                <p className="text-xs text-zinc-500">Tap below to confirm your order details with our team for lightning-fast processing.</p>
               </div>
               <a 
                 href={whatsappUrl} 
                 target="_blank" 
                 rel="noreferrer"
-                className="flex items-center justify-between w-full p-6 bg-[#25D366] hover:bg-[#20bd5c] text-white rounded-lg transition-all group shadow-xl shadow-green-100/50 border border-white/10"
+                className="flex items-center justify-between w-full p-6 bg-[#25D366] hover:bg-[#20bd5c] text-white rounded-lg transition-all group shadow-xl shadow-green-200/50 border border-white/20 active:scale-[0.98]"
               >
                 <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-2.5 rounded-full animate-bounce">
+                  <div className="bg-white/20 p-2.5 rounded-full">
                     <MessageCircle size={28} fill="currentColor" />
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-base uppercase tracking-wider">Confirm on WhatsApp</p>
-                    <p className="text-[11px] opacity-90 font-medium">Verify your order # {orderId.slice(-8).toUpperCase()}</p>
+                    <p className="font-bold text-base uppercase tracking-wider leading-tight">Confirm on WhatsApp</p>
+                    <p className="text-[11px] opacity-90 font-medium tracking-wide">Send order breakdown to support</p>
                   </div>
                 </div>
-                <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
+                <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform opacity-70" />
               </a>
+            </div>
+
+            {/* Notification Status - Refined as a "Next Steps" box */}
+            <div className={`mb-10 w-full px-5 py-4 rounded-lg text-xs border ${
+              !notified 
+                ? 'bg-zinc-50 border-zinc-100 text-zinc-400'
+                : notified?.success 
+                  ? 'bg-zinc-50 border-zinc-200 text-zinc-600' 
+                  : 'bg-zinc-50 border-zinc-200 text-zinc-600'
+            }`}>
+              {!notified ? (
+                <div className="flex items-center justify-center gap-2">
+                  <span className="w-2 h-2 bg-zinc-300 rounded-full animate-pulse" />
+                  <span className="font-medium">Updating order records...</span>
+                </div>
+              ) : notified.success ? (
+                <div className="flex items-center justify-center gap-2">
+                  <CheckCircle2 size={14} className="text-zinc-400" />
+                  <span>Confirmation email dispatched to <strong>{formData.email}</strong></span>
+                </div>
+              ) : (
+                <div className="text-left">
+                  <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-widest text-[9px] text-zinc-400">
+                    <span className="bg-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded-sm">Info</span>
+                    <span>Order Confirmation Status</span>
+                  </div>
+                  <p className="opacity-90 leading-relaxed">We sent a copy of the receipt to <strong>{formData.email}</strong>. If you don't see it, please ensure you use the WhatsApp button above to confirm your order.</p>
+                </div>
+              )}
             </div>
             
             <div className="w-full grid grid-cols-2 gap-4 mb-12">

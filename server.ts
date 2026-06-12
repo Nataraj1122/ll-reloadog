@@ -59,7 +59,7 @@ const logEmailStep = async (orderNumber: string, email: string, status: string, 
  */
 app.post("/api/test-email", async (req, res) => {
   const testTarget = "reloadwebsite172@gmail.com";
-  const sender = "onboarding@resend.dev";
+  const sender = "orders@reloadfashion.in";
   const testOrderNumber = "TEST-" + Date.now();
   
   console.log(`[Test Email] Initiating test to ${testTarget}`);
@@ -67,7 +67,7 @@ app.post("/api/test-email", async (req, res) => {
   
   try {
     const { data, error } = await resend.emails.send({
-      from: `Reload Store Test <${sender}>`,
+      from: `Reload Fashion <${sender}>`,
       to: testTarget,
       subject: "Resend Test Email",
       text: "This is a test email to verify your Resend configuration works correctly.",
@@ -138,7 +138,7 @@ const handleOrderEmail = async (req, res) => {
     }
 
     const adminEmail = "reloadwebsite172@gmail.com"; 
-    const defaultSender = "onboarding@resend.dev"; 
+    const defaultSender = "orders@reloadfashion.in"; 
 
     if (type === 'new_order') {
         // Log Attempt - Customer
@@ -146,7 +146,7 @@ const handleOrderEmail = async (req, res) => {
 
         // 1. Email to Customer
         const { data, error } = await resend.emails.send({
-          from: `Reload Store <${defaultSender}>`,
+          from: `Reload Fashion <${defaultSender}>`,
           to: customer_email,
           subject: `Order Confirmation - ${order_number}`,
           html: `
@@ -177,7 +177,7 @@ const handleOrderEmail = async (req, res) => {
 
         // 2. Email to Admin
         const { data: adminData, error: adminError } = await resend.emails.send({
-          from: `Store System <${defaultSender}>`,
+          from: `Reload Fashion <${defaultSender}>`,
           to: adminEmail,
           subject: `NEW ORDER ALERT - ${order_number}`,
           text: `
@@ -204,7 +204,7 @@ Check admin dashboard for details.
         await logEmailStep(order_number, customer_email, `attempted (Status: ${status})`);
         try {
           const { data, error } = await resend.emails.send({
-            from: `Reload Store <${defaultSender}>`,
+            from: `Reload Fashion <${defaultSender}>`,
             to: customer_email,
             subject: `Order Update - ${order_number}`,
             text: `Hi ${customer_name},\n\nYour order ${order_number} status has been updated to: ${status}.\n\nBest,\nReload Store Team`

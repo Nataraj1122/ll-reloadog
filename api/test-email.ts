@@ -8,14 +8,14 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req: any, res: any) {
   const testTarget = "reloadwebsite172@gmail.com";
-  const sender = "onboarding@resend.dev";
+  const sender = "orders@reloadfashion.in";
   const orderNum = "TEST-VERCEL-" + Date.now();
 
   try {
     console.log("[VERCEL TEST] Sending to", testTarget);
     
     const { data, error } = await resend.emails.send({
-      from: `Vercel Test <${sender}>`,
+      from: `Reload Fashion <${sender}>`,
       to: testTarget,
       subject: "Vercel Serverless Test",
       html: "<p>If you see this, Vercel Serverless Functions are working!</p>"

@@ -40,13 +40,13 @@ export default async function handler(req: any, res: any) {
     }
 
     const adminEmail = "reloadwebsite172@gmail.com";
-    const defaultSender = "onboarding@resend.dev";
+    const defaultSender = "orders@reloadfashion.in";
 
     if (type === 'new_order') {
         // Customer Email
         await logEmailStep(order_number, customer_email, 'attempted_customer');
         const customerResult = await resend.emails.send({
-          from: `Reload Store <${defaultSender}>`,
+          from: `Reload Fashion <${defaultSender}>`,
           to: customer_email,
           subject: `Order Confirmation - ${order_number}`,
           html: `<h3>Thank you for your order, ${customer_name}!</h3><p>Order ${order_number} confirmed.</p>`
@@ -65,7 +65,7 @@ export default async function handler(req: any, res: any) {
         // Admin Email
         await logEmailStep(order_number, adminEmail, 'attempted_admin');
         const adminResult = await resend.emails.send({
-          from: `Store System <${defaultSender}>`,
+          from: `Reload Fashion <${defaultSender}>`,
           to: adminEmail,
           subject: `NEW ORDER - ${order_number}`,
           text: `New order: ${order_number} from ${customer_name}`

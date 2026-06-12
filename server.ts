@@ -14,15 +14,6 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// 1. ADD PING ROUTE
-app.get("/api/ping", (req, res) => {
-  console.log("[TRACE] API Ping Hit");
-  res.status(200).json({
-    success: true,
-    message: "API working"
-  });
-});
-
 // Initialize Supabase Admin for logging
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://hnhyyucdpnjzepbvsldy.supabase.co";
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuaHl5dWNkcG5qemVwYnZzbGR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5Njk0MjYsImV4cCI6MjA5MzU0NTQyNn0._W6FNTVBQQdaEVjDtENezy3D6qZ2nufmP4iuxjrpznA";

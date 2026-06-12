@@ -135,6 +135,7 @@ DROP POLICY IF EXISTS "Users can insert own profiles" ON profiles;
 CREATE POLICY "Users can insert own profiles" ON profiles FOR INSERT WITH CHECK (id::text = auth.uid()::text);
 DROP POLICY IF EXISTS "Users can view own orders" ON orders;
 DROP POLICY IF EXISTS "Users can insert own orders" ON orders;
+DROP POLICY IF EXISTS "Users can manage own orders" ON orders;
 CREATE POLICY "Users can manage own orders" ON orders FOR ALL USING (auth.uid() IS NOT NULL);
 DROP POLICY IF EXISTS "Users can manage own wishlist" ON wishlist;
 CREATE POLICY "Users can manage own wishlist" ON wishlist FOR ALL USING (user_id::text = auth.uid()::text);

@@ -87,9 +87,6 @@ export default function CheckoutPage() {
     try {
       const orderNumber = `RLD-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
       
-      console.log("ALERT: STEP 1");
-      if (typeof window !== 'undefined') alert("ALERT: STEP 1");
-
       const itemsData = cartItems.map(item => ({
         productId: item.id,
         productName: item.name,
@@ -126,25 +123,13 @@ export default function CheckoutPage() {
         .select()
         .single();
 
-      const { data: supabaseData, error: supabaseError, status, statusText } = supabaseResponse;
-
-      console.log("[TRACE: SUPABASE] Response Received:", {
-        data: supabaseData,
-        error: supabaseError,
-        status,
-        statusText
-      });
+      const { data: supabaseData, error: supabaseError } = supabaseResponse;
 
       if (supabaseError) {
-        console.error("[TRACE: SUPABASE ERROR]", supabaseError);
-        const errDetail = `Status: ${status} | Text: ${statusText} | Msg: ${supabaseError.message} | Code: ${supabaseError.code}`;
-        if (typeof window !== 'undefined') alert("SUPABASE INSERT FAILED:\n" + errDetail);
-        throw new Error(errDetail);
+        console.error("[SUPABASE ERROR]", supabaseError);
+        throw new Error(supabaseError.message);
       }
       
-      console.log("ALERT: STEP 2");
-      if (typeof window !== 'undefined') alert("ALERT: STEP 2");
-
       // Save notification to Supabase (graceful fail if table doesn't exist yet)
       const { error: notificationError } = await supabase.from('notifications').insert([{
         order_id: supabaseData.id,
@@ -159,19 +144,6 @@ export default function CheckoutPage() {
       
       if (notificationError) {
         console.warn("Could not save notification to Supabase.", notificationError);
-      }
-
-      console.log("ALERT: STEP 3");
-      if (typeof window !== 'undefined') alert("ALERT: STEP 3");
-
-      // PING CHECK
-      try {
-        console.log("[CHECKOUT] Verifying API availability...");
-        const pingReq = await fetch('/api/ping');
-        const pingRes = await pingReq.json();
-        console.log("[CHECKOUT] Ping Result:", pingRes);
-      } catch (pErr) {
-        console.warn("[CHECKOUT] Ping failed", pErr);
       }
 
       // TRACING: Direct insert into email_logs from client to verify visibility
@@ -247,7 +219,7 @@ export default function CheckoutPage() {
               {!notified ? (
                 <div className="flex items-center justify-center gap-2">
                   <span className="w-2 h-2 bg-zinc-400 rounded-full animate-pulse" />
-                  <span>Processing order confirmation...</span>
+                  <span>Finalizing your order...</span>
                 </div>
               ) : notified.success ? (
                 <div className="flex items-center justify-center gap-2">
@@ -257,33 +229,37 @@ export default function CheckoutPage() {
               ) : (
                 <div className="text-left">
                   <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-widest text-[9px]">
-                    <span className="bg-red-600 text-white px-1.5 py-0.5 rounded-sm">Notice</span>
-                    <span>Email Delivery Delay</span>
+                    <span className="bg-red-600 text-white px-1.5 py-0.5 rounded-sm">Action Required</span>
+                    <span>Order Confirmation Delay</span>
                   </div>
-                  <p className="opacity-90 leading-relaxed mb-2">We couldn't deliver the confirmation email to <strong>{formData.email}</strong>. This often happens if the email address is not verified in our test system.</p>
-                  <p className="font-bold text-black border-t border-red-200 mt-2 pt-2">Please notify us on WhatsApp to confirm your order immediately.</p>
+                  <p className="opacity-90 leading-relaxed mb-2">We couldn't deliver the confirmation email to <strong>{formData.email}</strong>. This usually happens in testing mode when the email is not verified.</p>
+                  <p className="font-bold text-black border-t border-red-200 mt-2 pt-2">Please tap the WhatsApp button below to confirm your order immediately.</p>
                 </div>
               )}
             </div>
 
             {/* WhatsApp Integration */}
             <div className="w-full mb-12">
+              <div className="mb-4 text-left">
+                <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-400 mb-2">Instant Confirmation</h3>
+                <p className="text-xs text-zinc-500">Tap below to notify our team on WhatsApp for lightning-fast processing.</p>
+              </div>
               <a 
                 href={whatsappUrl} 
                 target="_blank" 
                 rel="noreferrer"
-                className="flex items-center justify-between w-full p-5 bg-[#25D366] hover:bg-[#20bd5c] text-white rounded-lg transition-all group shadow-lg shadow-green-100"
+                className="flex items-center justify-between w-full p-6 bg-[#25D366] hover:bg-[#20bd5c] text-white rounded-lg transition-all group shadow-xl shadow-green-100/50 border border-white/10"
               >
                 <div className="flex items-center gap-4">
-                  <div className="bg-white/20 p-2 rounded-full">
-                    <MessageCircle size={24} fill="currentColor" />
+                  <div className="bg-white/20 p-2.5 rounded-full animate-bounce">
+                    <MessageCircle size={28} fill="currentColor" />
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-sm uppercase tracking-wider">Confirm on WhatsApp</p>
-                    <p className="text-[10px] opacity-90">Send order details to our team</p>
+                    <p className="font-bold text-base uppercase tracking-wider">Confirm on WhatsApp</p>
+                    <p className="text-[11px] opacity-90 font-medium">Verify your order # {orderId.slice(-8).toUpperCase()}</p>
                   </div>
                 </div>
-                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
               </a>
             </div>
             

@@ -45,22 +45,38 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
 }
 
 /**
+ * Helper to log detailed email sending information as requested.
+ */
+const logEmailInfo = (label: string, info: any, sender: string, recipient: string) => {
+  console.log(`-------------------------------------------------`);
+  console.log(`[EMAIL LOG: ${label}]`);
+  console.log(`Sender: ${sender}`);
+  console.log(`Recipient: ${recipient}`);
+  console.log(`MessageId: ${info.messageId}`);
+  console.log(`Accepted: ${JSON.stringify(info.accepted)}`);
+  console.log(`Rejected: ${JSON.stringify(info.rejected)}`);
+  console.log(`Full Response:`, JSON.stringify(info, null, 2));
+  console.log(`-------------------------------------------------`);
+};
+
+/**
  * Test Route: Verify email sending logic immediately
  */
 app.post("/api/test-email", async (req, res) => {
   const testTarget = "reloadwebsite172@gmail.com";
+  const sender = process.env.SMTP_USER || "unknown";
   console.log(`[Test Email] Initiating test to ${testTarget}`);
   
   try {
     const info = await transporter.sendMail({
-      from: `"Reload Store Test" <${process.env.SMTP_USER}>`,
+      from: `"Reload Store Test" <${sender}>`,
       to: testTarget,
       subject: "STMP Test Email",
       text: "This is a test email to verify your SMTP configuration works correctly.",
       html: "<h3>SMTP Configuration Test</h3><p>If you see this, your email server is working perfectly!</p>"
     });
     
-    console.log("EMAIL SENT SUCCESSFULLY (Test Route)", info.messageId);
+    logEmailInfo("Test Route", info, sender, testTarget);
     res.json({ success: true, messageId: info.messageId, response: info.response });
   } catch (err: any) {
     console.error("EMAIL ERROR (Test Route):", err.message);
@@ -72,81 +88,113 @@ app.post("/api/test-email", async (req, res) => {
   }
 });
 
-// Notifications API
-app.post("/api/send-order-email", async (req, res) => {
+// Notifications API handler function
+const handleOrderEmail = async (req, res) => {
   try {
-    console.log("[API] Incoming request for /api/send-order-email");
+    console.log("[SERVER] Received notification request:", req.url, "Method:", req.method);
+    console.log("[SERVER] Payload:", JSON.stringify(req.body, null, 2));
+
     const { order_number, customer_name, customer_email, phone_number, total_amount, shipping_address, items, type, status } = req.body;
     
     if (!customer_email) {
-      console.warn("[API] Missing customer_email in request body");
+      console.warn("[API ERROR] Missing customer_email in request body");
       return res.status(400).json({ error: "customer_email is required" });
     }
 
-    const adminEmail = "reloadwebsite172@gmail.com"; // Requested specific admin email
+    const adminEmail = "reloadwebsite172@gmail.com"; 
 
     if (type === 'new_order') {
-        console.log(`[Notification] Processing NEW ORDER: ${order_number} for ${customer_email}`);
+        console.log(`[Notification] Processing NEW ORDER: ${order_number} for CUSTOMER: ${customer_email}`);
 
         // 1. Email to Customer
         try {
+          const sender = process.env.SMTP_USER || "unknown";
           const info = await transporter.sendMail({
-            from: `"Reload Store" <${process.env.SMTP_USER}>`,
+            from: `"Reload Store" <${sender}>`,
             to: customer_email,
             subject: `Order Confirmation - ${order_number}`,
-            html: `<h3>Thank you for your order, ${customer_name}!</h3>
-                   <p><strong>Order Number:</strong> ${order_number}</p>
-                   <p><strong>Total:</strong> Rs. ${total_amount}</p>
-                   <p><strong>Shipping to:</strong> ${shipping_address}</p>
-                   <p>We'll notify you when it ships.</p>`
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+                <h2 style="color: #000;">Thank you for your order, ${customer_name}!</h2>
+                <p>We've received your order and are processing it now.</p>
+                <div style="background: #f9f9f9; padding: 15px; margin: 20px 0;">
+                  <p><strong>Order Number:</strong> ${order_number}</p>
+                  <p><strong>Total Amount:</strong> Rs. ${total_amount}</p>
+                  <p><strong>Shipping Address:</strong> ${shipping_address}</p>
+                </div>
+                <p>We'll notify you as soon as your items ship.</p>
+                <hr />
+                <p style="font-size: 12px; color: #888;">Reload Store • Premium Experience</p>
+              </div>
+            `
           });
-          console.log("EMAIL SENT SUCCESSFULLY to Customer:", info.messageId);
+          logEmailInfo("Customer Confirmation", info, sender, customer_email);
         } catch (err: any) {
-          console.error("EMAIL ERROR (Customer):", err.message);
-          // Log specific authentication errors if they occur
-          if (err.message.includes('Invalid login') || err.message.includes('auth')) {
-             console.error("[SMTP] Authentication Failure detected. Check App Password.");
+          console.error("FAILURE: Error sending Customer email:", err.message);
+          if (err.message.includes('auth') || err.message.includes('login')) {
+            console.error("[SMTP AUTH] Gmail authentication failed. Ensure you use an APP PASSWORD.");
           }
         }
 
         // 2. Email to Admin
         try {
+          const sender = process.env.SMTP_USER || "unknown";
           const info = await transporter.sendMail({
-            from: `"Store System" <${process.env.SMTP_USER}>`,
+            from: `"Store System" <${sender}>`,
             to: adminEmail,
-            subject: `New Order Alert - ${order_number}`,
-            text: `New Alert!\nOrder Number: ${order_number}\nCustomer: ${customer_name}\nTotal: Rs. ${total_amount}\nPhone: ${phone_number}\nAddress: ${shipping_address}`,
+            subject: `NEW ORDER ALERT - ${order_number}`,
+            text: `
+NEW ORDER ALERT
+-------------------------------
+Order Number: ${order_number}
+Customer: ${customer_name}
+Email: ${customer_email}
+Phone: ${phone_number}
+Total: Rs. ${total_amount}
+Address: ${shipping_address}
+-------------------------------
+Check admin dashboard for details.
+            `,
           });
-          console.log("EMAIL SENT SUCCESSFULLY to Admin:", info.messageId);
+          logEmailInfo("Admin Alert", info, sender, adminEmail);
         } catch (err: any) {
-          console.error("EMAIL ERROR (Admin):", err.message);
+          console.error("FAILURE: Error sending Admin email:", err.message);
         }
     } else if (type === 'status_update') {
-        console.log(`[Notification] Processing STATUS UPDATE for: ${order_number} -> ${status}`);
+        console.log(`[Notification] Processing STATUS UPDATE for: ${order_number} to ${status}`);
         try {
+          const sender = process.env.SMTP_USER || "unknown";
           const info = await transporter.sendMail({
-            from: `"Reload Store" <${process.env.SMTP_USER}>`,
+            from: `"Reload Store" <${sender}>`,
             to: customer_email,
-            subject: `Order Updated - ${order_number}`,
-            text: `Hi ${customer_name},\n\nYour order ${order_number} status is now: ${status}.\n\nBest,\nReload Store Team`
+            subject: `Order Update - ${order_number}`,
+            text: `Hi ${customer_name},\n\nYour order ${order_number} status has been updated to: ${status}.\n\nBest,\nReload Store Team`
           });
-          console.log("EMAIL SENT SUCCESSFULLY (Status Update):", info.messageId);
+          logEmailInfo("Status Update", info, sender, customer_email);
         } catch (err: any) {
-          console.error("EMAIL ERROR (Status):", err.message);
+          console.error("FAILURE: Error sending status update email:", err.message);
         }
     }
 
-    res.json({ success: true });
+    return res.json({ success: true, message: "Notification process completed" });
   } catch (err: any) {
-    console.error("CRITICAL NOTIFICATION FAILURE:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("CRITICAL SERVER ERROR:", err.message);
+    return res.status(500).json({ error: err.message });
   }
-});
+};
 
-// Original endpoint alias for backward compatibility
-app.post("/api/notifications/order", (req, res) => {
-    // Redirect to the new handler or just call it
-    app._router.handle(req, res, () => {});
+// Define endpoints properly
+app.post("/api/send-order-email", handleOrderEmail);
+app.post("/api/notifications/order", handleOrderEmail);
+
+// Health check / Debug route
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    time: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    smtpConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS)
+  });
 });
 
 

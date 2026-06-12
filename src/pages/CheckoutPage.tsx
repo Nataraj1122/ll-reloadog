@@ -31,6 +31,7 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [orderError, setOrderError] = useState<string>('');
+  const [notified, setNotified] = useState<{ success: boolean; message?: string } | null>(null);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -142,7 +143,7 @@ export default function CheckoutPage() {
       }
 
       // Call notification service for email/whatsapp
-      await NotificationService.notifyNewOrder({
+      const notificationResult = await NotificationService.notifyNewOrder({
          order_number: orderNumber,
          customer_name: customerName,
          customer_email: formData.email,
@@ -151,6 +152,8 @@ export default function CheckoutPage() {
          shipping_address: fullAddress,
          items: itemsData
       });
+      
+      setNotified(notificationResult as any);
       
       setOrderId(orderNumber);
       await clearCart();
@@ -184,7 +187,19 @@ export default function CheckoutPage() {
             </div>
             <h1 className="text-4xl font-serif mb-4">Order Confirmed</h1>
             <p className="text-zinc-500 mb-2">Thank you for your purchase. Your order <span className="font-mono text-black">#{orderId.slice(-8).toUpperCase()}</span> has been placed successfully.</p>
-            <p className="text-zinc-400 text-sm mb-12">We've sent a confirmation email to {formData.email}.</p>
+            
+            {/* Notification Status */}
+            <div className={`mt-4 mb-8 px-4 py-3 rounded-sm text-xs font-medium border ${
+              notified?.success 
+                ? 'bg-zinc-50 border-zinc-100 text-zinc-600' 
+                : 'bg-red-50 border-red-100 text-red-600'
+            }`}>
+              {notified?.success 
+                ? `Confirmation sent to ${formData.email}` 
+                : `Notification failed: ${notified?.message || 'Technical error'}`
+              }
+              {!notified && <span className="animate-pulse">Sending confirmation...</span>}
+            </div>
             
             <div className="w-full bg-zinc-50 p-6 rounded-lg text-left mb-12 border border-zinc-100">
               <div className="flex items-center gap-3 mb-4 text-xs uppercase tracking-widest font-bold">

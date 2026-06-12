@@ -144,6 +144,9 @@ const handleOrderEmail = async (req, res) => {
         // Log Attempt - Customer
         await logEmailStep(order_number, customer_email, 'attempted (Customer Confirmation)');
 
+        const productListStr = items && Array.isArray(items) ? items.map((item: any) => `- ${item.productName || item.name || 'Item'} (x${item.quantity || 1})`).join('\n') : 'Items not specified';
+        const paymentMethod = req.body.payment_method || 'COD';
+
         // 1. Email to Customer
         const { data, error } = await resend.emails.send({
           from: `Reload Fashion <${defaultSender}>`,
@@ -155,8 +158,9 @@ const handleOrderEmail = async (req, res) => {
               <p>We've received your order and are processing it now.</p>
               <div style="background: #f9f9f9; padding: 15px; margin: 20px 0;">
                 <p><strong>Order Number:</strong> ${order_number}</p>
-                <p><strong>Total Amount:</strong> Rs. ${total_amount}</p>
+                <p><strong>Total Amount:</strong> ₹${total_amount}</p>
                 <p><strong>Shipping Address:</strong> ${shipping_address}</p>
+                <p><strong>Payment Method:</strong> ${paymentMethod}</p>
               </div>
               <p>We'll notify you as soon as your items ship.</p>
               <hr />
@@ -176,22 +180,26 @@ const handleOrderEmail = async (req, res) => {
         await logEmailStep(order_number, customer_email, 'sent (Customer Confirmation)', undefined, data);
 
         // 2. Email to Admin
+        const adminEmailContent = `New Order Received - ${phone_number || order_number}
+
+Order Number: ${order_number}
+Customer Name: ${customer_name}
+Phone Number: ${phone_number}
+Email: ${customer_email}
+
+Products Ordered:
+${productListStr}
+
+Total Amount: ₹${total_amount}
+Shipping Address: ${shipping_address}
+Payment Method: ${paymentMethod}
+`;
+
         const { data: adminData, error: adminError } = await resend.emails.send({
           from: `Reload Fashion <${defaultSender}>`,
           to: adminEmail,
-          subject: `NEW ORDER ALERT - ${order_number}`,
-          text: `
-NEW ORDER ALERT
--------------------------------
-Order Number: ${order_number}
-Customer: ${customer_name}
-Email: ${customer_email}
-Phone: ${phone_number}
-Total: Rs. ${total_amount}
-Address: ${shipping_address}
--------------------------------
-Check admin dashboard for details.
-          `,
+          subject: `New Order Received - ${phone_number || order_number}`,
+          text: adminEmailContent,
         });
         
         if (adminError) {
@@ -199,6 +207,48 @@ Check admin dashboard for details.
           // Don't fail the whole request if only admin alert fails
         } else {
           await logEmailStep(order_number, adminEmail, 'sent (Admin Alert)', undefined, adminData);
+        }
+
+        // 3. Automatically send a WhatsApp message to Admin
+        const adminPhone = "+919985936088"; // Specific number from user instructions
+        const whatsappMessage = `🛒 *New Order Received*
+
+*Order:* ${order_number}
+*Customer:* ${customer_name}
+*Phone:* ${phone_number}
+*Amount:* ₹${total_amount}
+
+*Products:*
+${productListStr}
+
+*Address:*
+${shipping_address}
+
+*Payment:*
+${paymentMethod}`;
+        
+        console.log(`[WHATSAPP] Attempting to send WhatsApp message to ${adminPhone}`);
+        console.log(`[WHATSAPP] Message payload:\n${whatsappMessage}`);
+        
+        if (process.env.WHATSAPP_API_URL) {
+          try {
+            await fetch(process.env.WHATSAPP_API_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.WHATSAPP_API_KEY || ''}`
+              },
+              body: JSON.stringify({
+                phone: adminPhone,
+                message: whatsappMessage
+              })
+            });
+            console.log("[WHATSAPP] Message sent successfully via API");
+          } catch (waErr: any) {
+            console.error("[WHATSAPP] Failed to send message via API", waErr.message);
+          }
+        } else {
+          console.log("[WHATSAPP] WHATSAPP_API_URL not configured. API call skipped. Consider integrating a provider like Twilio, Interakt, or WATI.");
         }
     } else if (type === 'status_update') {
         await logEmailStep(order_number, customer_email, `attempted (Status: ${status})`);

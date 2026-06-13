@@ -320,7 +320,7 @@ export default function Layout() {
       </AnimatePresence>
 
       <main className="flex-1">
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" onExitComplete={() => window.scrollTo(0, 0)}>
           <motion.div
             key={location.pathname}
             initial={{ opacity: 0, y: 10 }}

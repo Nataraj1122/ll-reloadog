@@ -631,8 +631,27 @@ export default function CheckoutPage() {
               </div>
               
               {(orderError || paymentVerifyError) && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded">
-                  {orderError || paymentVerifyError}
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg shadow-sm">
+                  <div className="flex gap-2 font-bold mb-1 items-center">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span>Payment Gateway Authentication Failed</span>
+                  </div>
+                  <p className="mb-2 text-red-700 leading-relaxed font-medium">
+                    Cashfree returned: <code className="bg-red-100/80 px-1.5 py-0.5 rounded text-red-800 font-mono text-[12px]">{orderError || paymentVerifyError}</code>
+                  </p>
+                  <div className="mt-3 pt-3 border-t border-red-200 text-red-800/90 text-[11px] leading-relaxed space-y-2">
+                    <p className="font-semibold text-red-900">Why this happens:</p>
+                    <p className="text-red-700">The configured Cashfree Client ID (App ID) or Secret Key does not match the active Cashfree API environment, or Payouts keys were accidentally generated instead of Payment Gateway keys.</p>
+                    <p className="font-semibold text-red-900 mt-2">How to solve this:</p>
+                    <ol className="list-decimal pl-4 space-y-1 text-red-700">
+                      <li>Log in to your <strong>Cashfree Merchant Dashboard</strong>.</li>
+                      <li>Click and select the <strong>Payment Gateway</strong> product (do NOT use Payouts, Auto-Collect, or other sections).</li>
+                      <li>Go to <strong>Developers</strong> &gt; <strong>API Keys</strong> &gt; click <strong>Generate API Keys</strong>.</li>
+                      <li>Copy your new <strong>App ID</strong> and save it as <code className="bg-red-100 px-1 rounded font-mono text-red-800 font-semibold">CASHFREE_CLIENT_ID</code> in Vercel or Settings.</li>
+                      <li>Copy your new <strong>Secret Key</strong> and save it as <code className="bg-red-100 px-1 rounded font-mono text-red-800 font-semibold">CASHFREE_CLIENT_SECRET</code>.</li>
+                      <li>Set <code className="bg-red-100 px-1 rounded font-mono text-red-800 font-semibold">CASHFREE_ENV</code> to <code className="bg-red-100 px-1 rounded font-mono text-red-800 font-semibold">production</code> if using live keys, or <code className="bg-red-100 px-1 rounded font-mono text-red-800 font-semibold">sandbox</code> if using test keys.</li>
+                    </ol>
+                  </div>
                 </div>
               )}
 

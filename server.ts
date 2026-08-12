@@ -288,7 +288,12 @@ app.post("/api/cashfree/create-order", async (req, res) => {
     ? "https://api.cashfree.com/pg/orders" 
     : "https://sandbox.cashfree.com/pg/orders";
 
-  console.log(`[CASHFREE] Creating order session. ID: ${order_id}, Env: ${process.env.CASHFREE_ENV || "sandbox"}`);
+  // Verify that the backend is reading the Vercel environment variables safely
+  console.log(`[CASHFREE CONFIG VERIFICATION] CASHFREE_CLIENT_ID exists: ${!!clientId}`);
+  console.log(`[CASHFREE CONFIG VERIFICATION] CASHFREE_CLIENT_SECRET exists: ${!!clientSecret}`);
+  console.log(`[CASHFREE CONFIG VERIFICATION] CASHFREE_ENV: ${process.env.CASHFREE_ENV || "not set"}`);
+
+  console.log(`[CASHFREE] Creating order session. ID: ${order_id}, Target Env: ${isProd ? "production" : "sandbox"}`);
 
   // 1. Validate credentials
   if (!clientId || !clientSecret) {
@@ -401,7 +406,7 @@ app.post("/api/cashfree/create-order", async (req, res) => {
 
     console.log("[CASHFREE API REQUEST PAYLOAD]:", JSON.stringify(requestBody, null, 2));
 
-    let cfResponse = await fetch(url, {
+    const cfResponse = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -412,48 +417,7 @@ app.post("/api/cashfree/create-order", async (req, res) => {
       body: JSON.stringify(requestBody)
     });
 
-    let data: any = await cfResponse.json();
-    let finalEnv = isProd ? "production" : "sandbox";
-
-    // Self-healing fallback: If primary endpoint fails due to authentication or credentials, automatically try the alternate environment
-    const isAuthFailure = cfResponse.status === 401 || 
-                          data.message?.toLowerCase().includes("auth") || 
-                          data.message?.toLowerCase().includes("credential") ||
-                          data.message?.toLowerCase().includes("client");
-
-    if (!cfResponse.ok && isAuthFailure) {
-      const alternateEnv = isProd ? "sandbox" : "production";
-      const alternateUrl = isProd 
-        ? "https://sandbox.cashfree.com/pg/orders" 
-        : "https://api.cashfree.com/pg/orders";
-        
-      console.warn(`[CASHFREE] Primary authentication failed on ${isProd ? "production" : "sandbox"}. Retrying with fallback: ${alternateEnv}...`);
-      
-      try {
-        const fallbackResponse = await fetch(alternateUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-client-id": clientId,
-            "x-client-secret": clientSecret,
-            "x-api-version": "2023-08-01"
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        const fallbackData: any = await fallbackResponse.json();
-        if (fallbackResponse.ok) {
-          console.log(`[CASHFREE] Fallback authentication succeeded on ${alternateEnv}! Session ID: ${fallbackData.payment_session_id}`);
-          cfResponse = fallbackResponse;
-          data = fallbackData;
-          finalEnv = alternateEnv;
-        } else {
-          console.error(`[CASHFREE] Fallback to ${alternateEnv} also failed:`, fallbackData);
-        }
-      } catch (fallbackErr: any) {
-        console.error(`[CASHFREE] Fallback fetch error:`, fallbackErr.message);
-      }
-    }
+    const data: any = await cfResponse.json();
 
     if (!cfResponse.ok) {
       console.error("[CASHFREE API ERROR RESPONSE]:", JSON.stringify(data, null, 2));
@@ -465,13 +429,13 @@ app.post("/api/cashfree/create-order", async (req, res) => {
       });
     }
 
-    console.log(`[CASHFREE] Order session generated successfully on ${finalEnv}. ID: ${data.payment_session_id}`);
+    console.log(`[CASHFREE] Order session generated successfully. ID: ${data.payment_session_id}`);
     return res.json({
       success: true,
       payment_session_id: data.payment_session_id,
       cf_order_id: data.cf_order_id,
       order_status: data.order_status,
-      environment: finalEnv
+      environment: isProd ? "production" : "sandbox"
     });
   } catch (error: any) {
     console.error("[CASHFREE EXCEPTION]:", error.message);
@@ -498,6 +462,11 @@ app.get("/api/cashfree/get-status", async (req, res) => {
     ? `https://api.cashfree.com/pg/orders/${order_id}` 
     : `https://sandbox.cashfree.com/pg/orders/${order_id}`;
 
+  // Verify that the backend is reading the Vercel environment variables safely
+  console.log(`[CASHFREE STATUS CONFIG VERIFICATION] CASHFREE_CLIENT_ID exists: ${!!clientId}`);
+  console.log(`[CASHFREE STATUS CONFIG VERIFICATION] CASHFREE_CLIENT_SECRET exists: ${!!clientSecret}`);
+  console.log(`[CASHFREE STATUS CONFIG VERIFICATION] CASHFREE_ENV: ${process.env.CASHFREE_ENV || "not set"}`);
+
   if (!clientId || !clientSecret) {
     return res.status(400).json({
       success: false,
@@ -507,7 +476,9 @@ app.get("/api/cashfree/get-status", async (req, res) => {
   }
 
   try {
-    let cfResponse = await fetch(url, {
+    console.log(`[CASHFREE STATUS] Checking status for order ID: ${order_id}, Target Env: ${isProd ? "production" : "sandbox"}`);
+
+    const cfResponse = await fetch(url, {
       method: "GET",
       headers: {
         "x-client-id": clientId,
@@ -516,47 +487,10 @@ app.get("/api/cashfree/get-status", async (req, res) => {
       }
     });
 
-    let data: any = await cfResponse.json();
-
-    // Self-healing fallback: If primary status endpoint fails due to authentication or credentials, automatically try the alternate environment
-    const isAuthFailure = cfResponse.status === 401 || 
-                          data.message?.toLowerCase().includes("auth") || 
-                          data.message?.toLowerCase().includes("credential") ||
-                          data.message?.toLowerCase().includes("client");
-
-    if (!cfResponse.ok && isAuthFailure) {
-      const alternateEnv = isProd ? "sandbox" : "production";
-      const alternateUrl = isProd 
-        ? `https://sandbox.cashfree.com/pg/orders/${order_id}` 
-        : `https://api.cashfree.com/pg/orders/${order_id}`;
-        
-      console.warn(`[CASHFREE STATUS] Primary status verification failed on ${isProd ? "production" : "sandbox"}. Retrying with fallback: ${alternateEnv}...`);
-      
-      try {
-        const fallbackResponse = await fetch(alternateUrl, {
-          method: "GET",
-          headers: {
-            "x-client-id": clientId,
-            "x-client-secret": clientSecret,
-            "x-api-version": "2023-08-01"
-          }
-        });
-
-        const fallbackData: any = await fallbackResponse.json();
-        if (fallbackResponse.ok) {
-          console.log(`[CASHFREE STATUS] Fallback verification succeeded on ${alternateEnv}! Status: ${fallbackData.order_status}`);
-          cfResponse = fallbackResponse;
-          data = fallbackData;
-        } else {
-          console.error(`[CASHFREE STATUS] Fallback to ${alternateEnv} also failed:`, fallbackData);
-        }
-      } catch (fallbackErr: any) {
-        console.error(`[CASHFREE STATUS] Fallback fetch error:`, fallbackErr.message);
-      }
-    }
+    const data: any = await cfResponse.json();
 
     if (!cfResponse.ok) {
-      console.error("[CASHFREE STATUS API ERRORRESPONSE]:", data);
+      console.error("[CASHFREE STATUS API ERROR RESPONSE]:", data);
       return res.status(cfResponse.status).json({
         success: false,
         error: "CASHFREE_API_ERROR",

@@ -16,6 +16,11 @@ export default async function handler(req: any, res: any) {
     ? `https://api.cashfree.com/pg/orders/${order_id}` 
     : `https://sandbox.cashfree.com/pg/orders/${order_id}`;
 
+  // Verify that the backend is reading the Vercel environment variables safely
+  console.log(`[VERCEL API CASHFREE STATUS CONFIG VERIFICATION] CASHFREE_CLIENT_ID exists: ${!!clientId}`);
+  console.log(`[VERCEL API CASHFREE STATUS CONFIG VERIFICATION] CASHFREE_CLIENT_SECRET exists: ${!!clientSecret}`);
+  console.log(`[VERCEL API CASHFREE STATUS CONFIG VERIFICATION] CASHFREE_ENV: ${process.env.CASHFREE_ENV || "not set"}`);
+
   if (!clientId || !clientSecret) {
     console.warn("[VERCEL API CASHFREE STATUS] ERROR: CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET is missing!");
     return res.status(400).json({
@@ -26,9 +31,9 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.log(`[VERCEL API CASHFREE STATUS] Checking status for order ID: ${order_id}, Env: ${process.env.CASHFREE_ENV || "sandbox"}`);
+    console.log(`[VERCEL API CASHFREE STATUS] Checking status for order ID: ${order_id}, Target Env: ${isProd ? "production" : "sandbox"}`);
 
-    let cfResponse = await fetch(url, {
+    const cfResponse = await fetch(url, {
       method: "GET",
       headers: {
         "x-client-id": clientId,
@@ -37,44 +42,7 @@ export default async function handler(req: any, res: any) {
       }
     });
 
-    let data: any = await cfResponse.json();
-
-    // Self-healing fallback: If primary status endpoint fails due to authentication or credentials, automatically try the alternate environment
-    const isAuthFailure = cfResponse.status === 401 || 
-                          data.message?.toLowerCase().includes("auth") || 
-                          data.message?.toLowerCase().includes("credential") ||
-                          data.message?.toLowerCase().includes("client");
-
-    if (!cfResponse.ok && isAuthFailure) {
-      const alternateEnv = isProd ? "sandbox" : "production";
-      const alternateUrl = isProd 
-        ? `https://sandbox.cashfree.com/pg/orders/${order_id}` 
-        : `https://api.cashfree.com/pg/orders/${order_id}`;
-        
-      console.warn(`[VERCEL API CASHFREE STATUS] Primary status verification failed on ${isProd ? "production" : "sandbox"}. Retrying with fallback: ${alternateEnv}...`);
-      
-      try {
-        const fallbackResponse = await fetch(alternateUrl, {
-          method: "GET",
-          headers: {
-            "x-client-id": clientId,
-            "x-client-secret": clientSecret,
-            "x-api-version": "2023-08-01"
-          }
-        });
-
-        const fallbackData: any = await fallbackResponse.json();
-        if (fallbackResponse.ok) {
-          console.log(`[VERCEL API CASHFREE STATUS] Fallback verification succeeded on ${alternateEnv}! Status: ${fallbackData.order_status}`);
-          cfResponse = fallbackResponse;
-          data = fallbackData;
-        } else {
-          console.error(`[VERCEL API CASHFREE STATUS] Fallback to ${alternateEnv} also failed:`, fallbackData);
-        }
-      } catch (fallbackErr: any) {
-        console.error(`[VERCEL API CASHFREE STATUS] Fallback fetch error:`, fallbackErr.message);
-      }
-    }
+    const data: any = await cfResponse.json();
 
     if (!cfResponse.ok) {
       console.error("[VERCEL API CASHFREE STATUS ERROR RESPONSE]:", data);

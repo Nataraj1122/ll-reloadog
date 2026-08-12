@@ -75,14 +75,39 @@ export default function CheckoutPage() {
               console.error('[CASHFREE CHECKOUT] Supabase order retrieval failed:', orderFetchErr);
             }
             
-            // 1. Update order status to 'Processing' in Supabase (or 'Paid')
+            // 1. Update order status to 'Processing' in Supabase (or 'Paid') and mark as 'Paid via Cashfree'
             const { error: updateError } = await supabase
               .from('orders')
-              .update({ status: 'Processing', payment_method: 'Online (Cashfree)' })
+              .update({ status: 'Processing', payment_method: 'Paid via Cashfree' })
               .eq('order_number', orderIdParam);
               
             if (updateError) {
               console.error('[CASHFREE CHECKOUT] Order status update failed:', updateError.message);
+            }
+
+            // Delete all previous orders for this user/email to keep only the paid one
+            if (orderData) {
+              try {
+                console.log('[CASHFREE CHECKOUT] Deleting previous order history for customer:', orderData.customer_email);
+                
+                // Delete previous orders by email
+                await supabase
+                  .from('orders')
+                  .delete()
+                  .eq('customer_email', orderData.customer_email)
+                  .neq('order_number', orderIdParam);
+
+                // Delete previous orders by user ID if present
+                if (orderData.user_id) {
+                  await supabase
+                    .from('orders')
+                    .delete()
+                    .eq('user_id', orderData.user_id)
+                    .neq('order_number', orderIdParam);
+                }
+              } catch (delErr) {
+                console.error('[CASHFREE CHECKOUT] Failed to clean up previous order history:', delErr);
+              }
             }
             
             // 2. Dispatch email and WhatsApp notifications

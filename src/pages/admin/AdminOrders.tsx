@@ -240,7 +240,18 @@ export default function AdminOrders() {
                         <div className="font-bold text-black text-xs uppercase tracking-wider mb-0.5">{order.customerName}</div>
                         <div className="text-xs text-zinc-500">{order.customerEmail}</div>
                      </td>
-                     <td className="px-6 py-6 font-bold text-black">{formatINR(order.totalAmount)}</td>
+                     <td className="px-6 py-6 font-bold text-black">
+                        <div>{formatINR(order.totalAmount)}</div>
+                        {order.paymentMethod?.toLowerCase().includes('paid') ? (
+                           <span className="inline-block mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] uppercase tracking-[0.1em] font-bold px-2.5 py-1 rounded-full">
+                              ✓ Paid via CF
+                           </span>
+                        ) : (
+                           <span className="inline-block mt-1 bg-zinc-50 text-zinc-400 border border-zinc-200 text-[9px] uppercase tracking-[0.1em] font-medium px-2.5 py-1 rounded-full">
+                              {order.paymentMethod || 'COD'}
+                           </span>
+                        )}
+                     </td>
                      <td className="px-6 py-6">
                         {order.status?.toLowerCase() === 'cancelled' ? (
                            <div className="flex flex-col items-start">
@@ -307,10 +318,21 @@ export default function AdminOrders() {
                                              </span>
                                           </div>
                                           <div className="flex flex-col gap-1">
-                                             <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Payment Method</span>
-                                             <span className="text-xs font-bold uppercase tracking-widest bg-zinc-200 px-2 py-1 rounded inline-block w-fit">
-                                                {order.paymentMethod}
-                                             </span>
+                                             <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Payment Status & Method</span>
+                                             {order.paymentMethod?.toLowerCase().includes('paid') ? (
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                   <span className="text-[9px] uppercase tracking-widest font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full inline-block">
+                                                      Paid: Online (Cashfree)
+                                                   </span>
+                                                   <span className="text-[9px] text-emerald-600 uppercase tracking-[0.15em] font-bold">
+                                                      ✓ Transaction Confirmed
+                                                   </span>
+                                                </div>
+                                             ) : (
+                                                <span className="text-[9px] uppercase tracking-widest font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 px-3 py-1.5 rounded-full inline-block w-fit mt-1">
+                                                   {order.paymentMethod || 'Cash on Delivery (COD)'}
+                                                </span>
+                                             )}
                                           </div>
                                           {order.cancelledAt && (
                                               <div className="flex flex-col gap-1 mt-4 p-4 border border-rose-100 bg-rose-50/50 rounded-sm">

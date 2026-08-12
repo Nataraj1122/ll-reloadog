@@ -1,21 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../lib/utils';
 import { ShoppingBag, ChevronRight, CheckCircle2, Truck, CreditCard, MessageCircle, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../services/notificationService';
+import { load } from '@cashfreepayments/cashfree-js';
 
 export default function CheckoutPage() {
   const { cartItems, cartSubtotal, clearCart } = useAppContext();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [orderId, setOrderId] = useState('');
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
+  const [paymentVerifyError, setPaymentVerifyError] = useState('');
   
   const [formData, setFormData] = useState({
     firstName: user?.user_metadata?.full_name?.split(' ')[0] || '',
@@ -32,6 +36,86 @@ export default function CheckoutPage() {
 
   const [orderError, setOrderError] = useState<string>('');
   const [notified, setNotified] = useState<{ success: boolean; message?: string } | null>(null);
+
+  const orderIdParam = searchParams.get('order_id');
+
+  // Verify Payment status when returning from Cashfree
+  useEffect(() => {
+    if (orderIdParam) {
+      const verifyPayment = async () => {
+        setVerifyingPayment(true);
+        setPaymentVerifyError('');
+        try {
+          console.log(`[CASHFREE CHECKOUT] Verifying payment status for Order ID: ${orderIdParam}`);
+          const response = await fetch(`/api/cashfree/get-status?order_id=${orderIdParam}`);
+          const data = await response.json();
+          
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Verification request failed');
+          }
+          
+          if (data.order_status === 'PAID') {
+            console.log('[CASHFREE CHECKOUT] Payment confirmed successfully!');
+            
+            // Retrieve current order from Supabase to trigger email and notifications
+            const { data: orderData, error: orderFetchErr } = await supabase
+              .from('orders')
+              .select('*')
+              .eq('order_number', orderIdParam)
+              .single();
+              
+            if (orderFetchErr) {
+              console.error('[CASHFREE CHECKOUT] Supabase order retrieval failed:', orderFetchErr);
+            }
+            
+            // 1. Update order status to 'Processing' in Supabase (or 'Paid')
+            const { error: updateError } = await supabase
+              .from('orders')
+              .update({ status: 'Processing', payment_method: 'Online (Cashfree)' })
+              .eq('order_number', orderIdParam);
+              
+            if (updateError) {
+              console.error('[CASHFREE CHECKOUT] Order status update failed:', updateError.message);
+            }
+            
+            // 2. Dispatch email and WhatsApp notifications
+            if (orderData) {
+              const notificationResult = await NotificationService.notifyNewOrder({
+                 order_number: orderIdParam,
+                 customer_name: orderData.customer_name,
+                 customer_email: orderData.customer_email,
+                 phone_number: orderData.phone_number,
+                 total_amount: orderData.total_amount,
+                 shipping_address: orderData.shipping_address,
+                 items: orderData.items || []
+              });
+              setNotified(notificationResult as any);
+            }
+            
+            // 3. Clear cart
+            await clearCart();
+            
+            // 4. Set Success states
+            setOrderId(orderIdParam);
+            setSuccess(true);
+          } else {
+            console.warn(`[CASHFREE CHECKOUT] Verification failed. Status is: ${data.order_status}`);
+            setPaymentVerifyError(`Payment verification failed. Current Cashfree Order Status is: ${data.order_status || 'UNKNOWN'}. Please try making the purchase again.`);
+            // Clear URL params so user is not stuck on a failed verify loop
+            setSearchParams({});
+          }
+        } catch (err: any) {
+          console.error('[CASHFREE CHECKOUT] Error during payment verification:', err);
+          setPaymentVerifyError(`An error occurred verifying your payment: ${err.message}. If payment succeeded but was not recorded, please contact support with Order ID: ${orderIdParam}.`);
+          setSearchParams({});
+        } finally {
+          setVerifyingPayment(false);
+        }
+      };
+      
+      verifyPayment();
+    }
+  }, [orderIdParam, setSearchParams, clearCart]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -63,6 +147,7 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     if (e) e.preventDefault();
     setOrderError('');
+    setPaymentVerifyError('');
     
     // 1. Validation: User logged in
     if (!user) {
@@ -85,6 +170,14 @@ export default function CheckoutPage() {
     setLoading(true);
     
     try {
+      // Initialize Cashfree client-side SDK dynamically using the config env
+      const cashEnv = import.meta.env.VITE_CASHFREE_ENV || 'sandbox';
+      console.log(`[CASHFREE CHECKOUT] Initializing Cashfree JS SDK in mode: ${cashEnv}`);
+      
+      const cashfree = await load({
+        mode: cashEnv as 'sandbox' | 'production'
+      });
+      
       const orderNumber = `RLD-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
       
       const itemsData = cartItems.map(item => ({
@@ -109,76 +202,95 @@ export default function CheckoutPage() {
         zip_code: formData.zipCode,
         items: itemsData,
         total_price: cartSubtotal, 
-        payment_method: 'COD',
-        status: 'pending',
+        payment_method: 'Online (Cashfree)',
+        status: 'Pending Payment',
         created_at: new Date().toISOString()
       };
 
-      console.log("[TRACE: SUPABASE] Sending Payload:", orderPayload);
+      console.log("[CASHFREE CHECKOUT] Storing order in Supabase with status 'Pending Payment' before payment gateway redirection:", orderPayload);
 
-      // SEND TO SUPABASE
-      const supabaseResponse = await supabase
+      // Save order record to Supabase
+      const { data: supabaseData, error: supabaseError } = await supabase
         .from('orders')
         .insert([orderPayload])
         .select()
         .single();
 
-      const { data: supabaseData, error: supabaseError } = supabaseResponse;
-
       if (supabaseError) {
-        console.error("[SUPABASE ERROR]", supabaseError);
-        throw new Error(supabaseError.message);
+        console.error("[CASHFREE CHECKOUT] Supabase save error:", supabaseError);
+        throw new Error(`Failed to save order record in Database: ${supabaseError.message}`);
       }
       
-      // Save notification to Supabase (graceful fail if table doesn't exist yet)
-      const { error: notificationError } = await supabase.from('notifications').insert([{
-        order_id: supabaseData.id,
-        order_number: orderNumber,
-        customer_name: customerName,
-        customer_email: formData.email,
-        phone_number: formData.phone,
-        total_amount: cartSubtotal,
-        message: `New order placed by ${customerName}`,
-        type: 'new_order'
-      }]);
-      
-      if (notificationError) {
-        console.warn("Could not save notification to Supabase.", notificationError);
+      // Save notification record to Supabase (graceful fallback)
+      try {
+        await supabase.from('notifications').insert([{
+          order_id: supabaseData.id,
+          order_number: orderNumber,
+          customer_name: customerName,
+          customer_email: formData.email,
+          phone_number: formData.phone,
+          total_amount: cartSubtotal,
+          message: `New online payment order initiated by ${customerName}`,
+          type: 'new_order'
+        }]);
+      } catch (nErr) {
+        console.warn("Could not save initial notification", nErr);
       }
 
-      // TRACING: Direct insert into email_logs from client to verify visibility
+      // Record direct tracing log
       try {
         await supabase.from('email_logs').insert([{
           order_number: orderNumber,
           customer_email: formData.email,
-          status: 'order_confirmed_client',
+          status: 'online_payment_initiated',
           created_at: new Date().toISOString()
         }]);
       } catch (logErr) {
         console.warn("[CHECKOUT] Client-side logging failed", logErr);
       }
 
-      // Call notification service for email/whatsapp
-      const notificationResult = await NotificationService.notifyNewOrder({
-         order_number: orderNumber,
-         customer_name: customerName,
-         customer_email: formData.email,
-         phone_number: formData.phone,
-         total_amount: cartSubtotal,
-         shipping_address: fullAddress,
-         items: itemsData
+      // Generate payment session ID from Cashfree Backend
+      const returnUrl = `${window.location.origin}/checkout?order_id=${orderNumber}`;
+      console.log("[CASHFREE CHECKOUT] Requesting payment session ID from backend...");
+
+      const cfSessionResponse = await fetch("/api/cashfree/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          order_id: orderNumber,
+          order_amount: cartSubtotal,
+          customer_details: {
+            customer_id: user.id,
+            customer_phone: formData.phone,
+            customer_email: formData.email,
+            customer_name: customerName
+          },
+          return_url: returnUrl
+        })
       });
+
+      const cfData = await cfSessionResponse.json();
+
+      if (!cfSessionResponse.ok || !cfData.success) {
+        if (cfData.error === "CASHFREE_CREDENTIALS_MISSING") {
+          throw new Error("Cashfree Credentials Missing: Developer has not set up CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET on the server yet. Please add them under Settings -> Environment Variables.");
+        }
+        throw new Error(cfData.message || "Failed to create Cashfree order session.");
+      }
+
+      console.log("[CASHFREE CHECKOUT] Payment session ID acquired. Redirecting user to secure Cashfree Checkout checkout standard overlay...");
       
-      setNotified(notificationResult as any);
-      
-      setOrderId(orderNumber);
-      await clearCart();
-      setSuccess(true);
-      
+      // Redirect or overlay Cashfree standard PG UI
+      cashfree.checkout({
+        paymentSessionId: cfData.payment_session_id,
+        redirectTarget: "_self"
+      });
+
     } catch (error: any) {
-      console.error("Error during order placement:", error);
-      const errorMessage = error.message || JSON.stringify(error);
-      setOrderError(`Failed to place order: ${errorMessage}`);
+      console.error("[CASHFREE CHECKOUT] Exception:", error);
+      setOrderError(error.message || "An error occurred initiating your online payment transaction. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -275,12 +387,24 @@ export default function CheckoutPage() {
                   <CreditCard size={12} />
                   <span>Payment</span>
                 </div>
-                <p className="text-sm font-medium">Cash on Delivery</p>
+                <p className="text-sm font-medium">Online (Cashfree)</p>
               </div>
             </div>
 
             <Link to="/" className="btn-primary w-full py-5 text-center">Back to Store</Link>
           </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  if (verifyingPayment) {
+    return (
+      <div className="min-h-screen pt-32 pb-24 bg-white flex items-center justify-center">
+        <div className="max-w-md w-full mx-auto px-6 text-center space-y-6">
+          <div className="w-16 h-16 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin mx-auto" />
+          <h2 className="text-2xl font-serif text-black">Verifying Payment</h2>
+          <p className="text-zinc-500 text-sm">Please wait while we confirm your payment status with Cashfree Payments. Do not close or refresh this page.</p>
         </div>
       </div>
     );
@@ -394,20 +518,24 @@ export default function CheckoutPage() {
 
               <div className="pt-12">
                 <h3 className="text-xl font-serif mb-6">Payment Method</h3>
-                <div className="p-6 border border-black bg-zinc-50 flex items-center justify-between">
+                <div className="p-6 border border-zinc-900 bg-zinc-50 flex items-center justify-between rounded-lg">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center">
-                      <CreditCard size={18} className="text-white" />
+                    <div className="w-10 h-10 bg-zinc-900 rounded-full flex items-center justify-center text-white">
+                      <CreditCard size={18} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold uppercase tracking-widest">Cash on Delivery</p>
-                      <p className="text-xs text-zinc-500">Pay when your items arrive</p>
+                      <p className="text-sm font-bold uppercase tracking-wider text-zinc-900">Online Payment</p>
+                      <p className="text-xs text-zinc-500">UPI, Credit/Debit Cards, NetBanking, Wallets via Cashfree</p>
                     </div>
                   </div>
-                  <div className="w-5 h-5 rounded-full border-2 border-black flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 bg-black rounded-full" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] uppercase tracking-widest bg-zinc-200 text-zinc-800 px-2 py-1 rounded font-bold">Secured</span>
+                    <div className="w-5 h-5 rounded-full border-2 border-zinc-900 flex items-center justify-center">
+                      <div className="w-2.5 h-2.5 bg-zinc-900 rounded-full" />
+                    </div>
                   </div>
                 </div>
+                <p className="text-[10px] text-zinc-400 mt-3 italic">* Cash on Delivery (COD) has been deactivated. Please complete your payment online using Cashfree for priority processing.</p>
               </div>
             </form>
           </div>
@@ -452,9 +580,9 @@ export default function CheckoutPage() {
                 </div>
               </div>
               
-              {orderError && (
+              {(orderError || paymentVerifyError) && (
                 <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded">
-                  {orderError}
+                  {orderError || paymentVerifyError}
                 </div>
               )}
 
@@ -468,12 +596,12 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <ShoppingBag size={18} className="group-hover:scale-110 transition-transform" />
-                    <span>Complete Purchase</span>
+                    <span>Pay with Cashfree</span>
                   </>
                 )}
               </button>
               
-              <p className="text-center text-[9px] uppercase tracking-[0.2em] font-medium text-zinc-400 mt-6">Secure Checkout • No payment upfront</p>
+              <p className="text-center text-[9px] uppercase tracking-[0.2em] font-medium text-zinc-400 mt-6">Secure Checkout • SSL Encrypted Payments</p>
             </div>
           </div>
         </div>

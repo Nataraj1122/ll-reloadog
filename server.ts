@@ -277,6 +277,143 @@ ${paymentMethod}`;
   }
 };
 
+// Cashfree: Create Order Endpoint
+app.post("/api/cashfree/create-order", async (req, res) => {
+  const { order_id, order_amount, customer_details, return_url } = req.body;
+  
+  const clientId = process.env.CASHFREE_CLIENT_ID;
+  const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
+  const isProd = process.env.CASHFREE_ENV === "production";
+  const url = isProd 
+    ? "https://api.cashfree.com/pg/orders" 
+    : "https://sandbox.cashfree.com/pg/orders";
+
+  console.log(`[CASHFREE] Creating order session. ID: ${order_id}, Env: ${process.env.CASHFREE_ENV || "sandbox"}`);
+
+  if (!clientId || !clientSecret) {
+    console.warn("[CASHFREE] ERROR: CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET is missing!");
+    return res.status(400).json({
+      success: false,
+      error: "CASHFREE_CREDENTIALS_MISSING",
+      message: "Cashfree Payment Gateway is not configured yet. Please configure CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET in the settings/environment variables."
+    });
+  }
+
+  try {
+    const cfResponse = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-client-id": clientId,
+        "x-client-secret": clientSecret,
+        "x-api-version": "2023-08-01"
+      },
+      body: JSON.stringify({
+        order_id: order_id,
+        order_amount: parseFloat(order_amount).toFixed(2),
+        order_currency: "INR",
+        customer_details: {
+          customer_id: customer_details.customer_id || `cust_${Date.now()}`,
+          customer_phone: customer_details.customer_phone.replace(/\D/g, '').slice(-10) || "9999999999",
+          customer_email: customer_details.customer_email || "customer@example.com",
+          customer_name: customer_details.customer_name || "Guest Customer"
+        },
+        order_meta: {
+          return_url: return_url
+        }
+      })
+    });
+
+    const data: any = await cfResponse.json();
+
+    if (!cfResponse.ok) {
+      console.error("[CASHFREE API ERROR RESPONSE]:", data);
+      return res.status(cfResponse.status).json({
+        success: false,
+        error: "CASHFREE_API_ERROR",
+        message: data.message || "Failed to create order on Cashfree PG",
+        details: data
+      });
+    }
+
+    console.log(`[CASHFREE] Order session generated: ${data.payment_session_id}`);
+    return res.json({
+      success: true,
+      payment_session_id: data.payment_session_id,
+      cf_order_id: data.cf_order_id,
+      order_status: data.order_status
+    });
+  } catch (error: any) {
+    console.error("[CASHFREE EXCEPTION]:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "CASHFREE_SERVER_EXCEPTION",
+      message: error.message
+    });
+  }
+});
+
+// Cashfree: Retrieve Order Status Endpoint
+app.get("/api/cashfree/get-status", async (req, res) => {
+  const { order_id } = req.query;
+
+  if (!order_id) {
+    return res.status(400).json({ success: false, error: "Missing order_id" });
+  }
+
+  const clientId = process.env.CASHFREE_CLIENT_ID;
+  const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
+  const isProd = process.env.CASHFREE_ENV === "production";
+  const url = isProd 
+    ? `https://api.cashfree.com/pg/orders/${order_id}` 
+    : `https://sandbox.cashfree.com/pg/orders/${order_id}`;
+
+  if (!clientId || !clientSecret) {
+    return res.status(400).json({
+      success: false,
+      error: "CASHFREE_CREDENTIALS_MISSING",
+      message: "Cashfree credentials are not configured on the server."
+    });
+  }
+
+  try {
+    const cfResponse = await fetch(url, {
+      method: "GET",
+      headers: {
+        "x-client-id": clientId,
+        "x-client-secret": clientSecret,
+        "x-api-version": "2023-08-01"
+      }
+    });
+
+    const data: any = await cfResponse.json();
+
+    if (!cfResponse.ok) {
+      console.error("[CASHFREE STATUS API ERRORRESPONSE]:", data);
+      return res.status(cfResponse.status).json({
+        success: false,
+        error: "CASHFREE_API_ERROR",
+        message: data.message || "Failed to check order status from Cashfree PG"
+      });
+    }
+
+    console.log(`[CASHFREE] Verified status for order ${order_id}:`, data.order_status);
+    return res.json({
+      success: true,
+      order_status: data.order_status,
+      order_amount: data.order_amount,
+      payment_session_id: data.payment_session_id
+    });
+  } catch (error: any) {
+    console.error("[CASHFREE STATUS EXCEPTION]:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "CASHFREE_SERVER_EXCEPTION",
+      message: error.message
+    });
+  }
+});
+
 // Define endpoints properly
 app.post("/api/send-order-email", handleOrderEmail);
 app.post("/api/notifications/order", handleOrderEmail);

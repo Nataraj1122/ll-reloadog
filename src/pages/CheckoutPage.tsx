@@ -48,7 +48,14 @@ export default function CheckoutPage() {
         try {
           console.log(`[CASHFREE CHECKOUT] Verifying payment status for Order ID: ${orderIdParam}`);
           const response = await fetch(`/api/cashfree/get-status?order_id=${orderIdParam}`);
-          const data = await response.json();
+          const text = await response.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (jsonErr) {
+            console.error(`[CASHFREE CHECKOUT] Failed to parse status response as JSON. Status: ${response.status} ${response.statusText}. Response snippet:`, text.slice(0, 500));
+            throw new Error(`Server returned invalid response (HTTP ${response.status}): ${text.slice(0, 100)}...`);
+          }
           
           if (!response.ok || !data.success) {
             throw new Error(data.message || 'Verification request failed');
@@ -170,16 +177,43 @@ export default function CheckoutPage() {
     setLoading(true);
     
     try {
-      // Initialize Cashfree client-side SDK dynamically using the config env
-      const cashEnv = import.meta.env.VITE_CASHFREE_ENV || 'sandbox';
-      console.log(`[CASHFREE CHECKOUT] Initializing Cashfree JS SDK in mode: ${cashEnv}`);
-      
-      const cashfree = await load({
-        mode: cashEnv as 'sandbox' | 'production'
-      });
-      
+      // 4. Strict Pattern/Content Validations
+      // Validate Phone Format (between 10 and 12 digits)
+      const cleanedPhone = formData.phone.replace(/\D/g, '');
+      if (!cleanedPhone || cleanedPhone.length < 10 || cleanedPhone.length > 12) {
+        throw new Error(`Invalid phone number format: "${formData.phone}". Please enter a valid 10 to 12 digit phone number (e.g., 9999999999 or +91 99999 99999).`);
+      }
+
+      // Validate Email Format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error(`Invalid email address format: "${formData.email}". Please enter a valid email address.`);
+      }
+
+      // Validate Amount
+      if (typeof cartSubtotal !== 'number' || cartSubtotal <= 0) {
+        throw new Error(`Invalid grand total amount: ₹${cartSubtotal}. The amount must be greater than zero.`);
+      }
+
       const orderNumber = `RLD-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`;
       
+      // Validate Order ID format (must be 3-45 alphanumeric, hyphen, underscore)
+      const orderIdRegex = /^[a-zA-Z0-9_-]+$/;
+      if (!orderIdRegex.test(orderNumber) || orderNumber.length < 3 || orderNumber.length > 45) {
+        throw new Error(`Generated Order ID "${orderNumber}" does not match the required pattern (3-45 chars, alphanumeric/hyphen/underscore).`);
+      }
+
+      // Validate Return URL Format
+      const returnUrl = `${window.location.origin}/checkout?order_id=${orderNumber}`;
+      try {
+        const urlObj = new URL(returnUrl);
+        if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+          throw new Error(`Unsupported protocol: ${urlObj.protocol}`);
+        }
+      } catch (urlErr) {
+        throw new Error(`Generated Return URL "${returnUrl}" is invalid.`);
+      }
+
       const itemsData = cartItems.map(item => ({
         productId: item.id,
         productName: item.name,
@@ -197,7 +231,7 @@ export default function CheckoutPage() {
         order_number: orderNumber,
         customer_name: customerName,
         customer_email: formData.email,
-        phone_number: formData.phone,
+        phone_number: cleanedPhone, // Save cleaned phone number
         shipping_address: fullAddress,
         zip_code: formData.zipCode,
         items: itemsData,
@@ -228,7 +262,7 @@ export default function CheckoutPage() {
           order_number: orderNumber,
           customer_name: customerName,
           customer_email: formData.email,
-          phone_number: formData.phone,
+          phone_number: cleanedPhone,
           total_amount: cartSubtotal,
           message: `New online payment order initiated by ${customerName}`,
           type: 'new_order'
@@ -250,10 +284,10 @@ export default function CheckoutPage() {
       }
 
       // Generate payment session ID from Cashfree Backend
-      const returnUrl = `${window.location.origin}/checkout?order_id=${orderNumber}`;
-      console.log("[CASHFREE CHECKOUT] Requesting payment session ID from backend...");
+      const apiEndpoint = "/api/cashfree/create-order";
+      console.log(`[CASHFREE CHECKOUT] Requesting payment session ID from backend endpoint: ${apiEndpoint}...`);
 
-      const cfSessionResponse = await fetch("/api/cashfree/create-order", {
+      const cfSessionResponse = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -263,7 +297,7 @@ export default function CheckoutPage() {
           order_amount: cartSubtotal,
           customer_details: {
             customer_id: user.id,
-            customer_phone: formData.phone,
+            customer_phone: cleanedPhone,
             customer_email: formData.email,
             customer_name: customerName
           },
@@ -271,16 +305,32 @@ export default function CheckoutPage() {
         })
       });
 
-      const cfData = await cfSessionResponse.json();
+      const cfText = await cfSessionResponse.text();
+      let cfData;
+      try {
+        cfData = JSON.parse(cfText);
+      } catch (jsonErr) {
+        console.error(`[CASHFREE CHECKOUT] Failed to parse order creation response as JSON. Status: ${cfSessionResponse.status} ${cfSessionResponse.statusText}. Response text:`, cfText);
+        throw new Error(`Server returned invalid response (HTTP ${cfSessionResponse.status}): ${cfText.slice(0, 150)}...`);
+      }
 
       if (!cfSessionResponse.ok || !cfData.success) {
+        console.error("[CASHFREE CHECKOUT FAIL] Received actual API response failure from server:", cfData);
         if (cfData.error === "CASHFREE_CREDENTIALS_MISSING") {
           throw new Error("Cashfree Credentials Missing: Developer has not set up CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET on the server yet. Please add them under Settings -> Environment Variables.");
         }
         throw new Error(cfData.message || "Failed to create Cashfree order session.");
       }
 
-      console.log("[CASHFREE CHECKOUT] Payment session ID acquired. Redirecting user to secure Cashfree Checkout checkout standard overlay...");
+      // Dynamically load Cashfree client-side SDK based on environment returned by the backend
+      const cashEnv = cfData.environment || 'sandbox';
+      console.log(`[CASHFREE CHECKOUT] Dynamically initializing Cashfree JS SDK in mode: ${cashEnv}`);
+      
+      const cashfree = await load({
+        mode: cashEnv as 'sandbox' | 'production'
+      });
+
+      console.log("[CASHFREE CHECKOUT] Payment session ID acquired. Redirecting user to secure Cashfree Checkout standard overlay...");
       
       // Redirect or overlay Cashfree standard PG UI
       cashfree.checkout({

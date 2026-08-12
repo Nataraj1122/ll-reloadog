@@ -290,6 +290,7 @@ app.post("/api/cashfree/create-order", async (req, res) => {
 
   console.log(`[CASHFREE] Creating order session. ID: ${order_id}, Env: ${process.env.CASHFREE_ENV || "sandbox"}`);
 
+  // 1. Validate credentials
   if (!clientId || !clientSecret) {
     console.warn("[CASHFREE] ERROR: CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET is missing!");
     return res.status(400).json({
@@ -299,7 +300,107 @@ app.post("/api/cashfree/create-order", async (req, res) => {
     });
   }
 
+  // 2. Validate API endpoint
   try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname !== 'api.cashfree.com' && urlObj.hostname !== 'sandbox.cashfree.com') {
+      throw new Error(`Invalid Cashfree Hostname: ${urlObj.hostname}`);
+    }
+  } catch (urlErr: any) {
+    console.error("[CASHFREE VALIDATION] Endpoint validation failed:", urlErr.message);
+    return res.status(400).json({
+      success: false,
+      error: "INVALID_API_ENDPOINT",
+      message: `Invalid Cashfree API Endpoint configured: ${url}`
+    });
+  }
+
+  // 3. Validate Order ID
+  const orderIdRegex = /^[a-zA-Z0-9_-]+$/;
+  if (!order_id || typeof order_id !== "string" || !orderIdRegex.test(order_id) || order_id.length < 3 || order_id.length > 45) {
+    const errMsg = `Invalid Order ID format: ${order_id}. Must be 3-45 chars, alphanumeric with hyphens/underscores only.`;
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_ORDER_ID", message: errMsg });
+  }
+
+  // 4. Validate Order Amount
+  const parsedAmount = parseFloat(order_amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    const errMsg = `Invalid Order Amount: ${order_amount}. Must be a positive numeric value greater than zero.`;
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_ORDER_AMOUNT", message: errMsg });
+  }
+
+  // 5. Validate Customer Details
+  if (!customer_details) {
+    console.error("[CASHFREE VALIDATION] Missing customer details");
+    return res.status(400).json({ success: false, error: "MISSING_CUSTOMER_DETAILS", message: "Customer details are required." });
+  }
+
+  // Email Validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const custEmail = customer_details.customer_email || "";
+  if (!custEmail || typeof custEmail !== "string" || !emailRegex.test(custEmail)) {
+    const errMsg = `Invalid Customer Email: ${custEmail}. Must be a valid email format.`;
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_CUSTOMER_EMAIL", message: errMsg });
+  }
+
+  // Phone Validation
+  const rawPhone = customer_details.customer_phone || "";
+  const cleanedPhone = String(rawPhone).replace(/\D/g, '');
+  if (!cleanedPhone || cleanedPhone.length < 10 || cleanedPhone.length > 12) {
+    const errMsg = `Invalid Customer Phone: ${rawPhone} (Cleaned: ${cleanedPhone}). Must be a valid 10 to 12 digit phone number.`;
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_CUSTOMER_PHONE", message: errMsg });
+  }
+
+  // Customer ID Validation
+  const custId = customer_details.customer_id || `cust_${Date.now()}`;
+  if (typeof custId !== "string" || !orderIdRegex.test(custId) || custId.length < 3 || custId.length > 45) {
+    const errMsg = `Invalid Customer ID: ${custId}. Must be 3-45 chars, alphanumeric with hyphens/underscores only.`;
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_CUSTOMER_ID", message: errMsg });
+  }
+
+  // Customer Name Validation
+  const custName = customer_details.customer_name || "Guest Customer";
+  if (!custName || typeof custName !== "string" || custName.trim().length === 0) {
+    const errMsg = "Customer Name is required and cannot be empty.";
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_CUSTOMER_NAME", message: errMsg });
+  }
+
+  // 6. Validate Return URL
+  try {
+    const urlObj = new URL(return_url);
+    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+      throw new Error(`Unsupported protocol: ${urlObj.protocol}`);
+    }
+  } catch (urlErr: any) {
+    const errMsg = `Invalid Return URL format: ${return_url}. Must be a valid HTTP or HTTPS URL.`;
+    console.error("[CASHFREE VALIDATION]", errMsg);
+    return res.status(400).json({ success: false, error: "INVALID_RETURN_URL", message: errMsg });
+  }
+
+  try {
+    const requestBody = {
+      order_id: order_id,
+      order_amount: parsedAmount.toFixed(2),
+      order_currency: "INR",
+      customer_details: {
+        customer_id: custId,
+        customer_phone: cleanedPhone,
+        customer_email: custEmail,
+        customer_name: custName
+      },
+      order_meta: {
+        return_url: return_url
+      }
+    };
+
+    console.log("[CASHFREE API REQUEST PAYLOAD]:", JSON.stringify(requestBody, null, 2));
+
     const cfResponse = await fetch(url, {
       method: "POST",
       headers: {
@@ -308,26 +409,13 @@ app.post("/api/cashfree/create-order", async (req, res) => {
         "x-client-secret": clientSecret,
         "x-api-version": "2023-08-01"
       },
-      body: JSON.stringify({
-        order_id: order_id,
-        order_amount: parseFloat(order_amount).toFixed(2),
-        order_currency: "INR",
-        customer_details: {
-          customer_id: customer_details.customer_id || `cust_${Date.now()}`,
-          customer_phone: customer_details.customer_phone.replace(/\D/g, '').slice(-10) || "9999999999",
-          customer_email: customer_details.customer_email || "customer@example.com",
-          customer_name: customer_details.customer_name || "Guest Customer"
-        },
-        order_meta: {
-          return_url: return_url
-        }
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const data: any = await cfResponse.json();
 
     if (!cfResponse.ok) {
-      console.error("[CASHFREE API ERROR RESPONSE]:", data);
+      console.error("[CASHFREE API ERROR RESPONSE]:", JSON.stringify(data, null, 2));
       return res.status(cfResponse.status).json({
         success: false,
         error: "CASHFREE_API_ERROR",
@@ -336,12 +424,13 @@ app.post("/api/cashfree/create-order", async (req, res) => {
       });
     }
 
-    console.log(`[CASHFREE] Order session generated: ${data.payment_session_id}`);
+    console.log(`[CASHFREE] Order session generated successfully. ID: ${data.payment_session_id}`);
     return res.json({
       success: true,
       payment_session_id: data.payment_session_id,
       cf_order_id: data.cf_order_id,
-      order_status: data.order_status
+      order_status: data.order_status,
+      environment: isProd ? "production" : "sandbox"
     });
   } catch (error: any) {
     console.error("[CASHFREE EXCEPTION]:", error.message);

@@ -125,7 +125,7 @@ export default async function handler(req: any, res: any) {
 
     console.log("[VERCEL API CASHFREE REQUEST PAYLOAD]:", JSON.stringify(requestBody, null, 2));
 
-    const cfResponse = await fetch(url, {
+    let cfResponse = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -136,7 +136,48 @@ export default async function handler(req: any, res: any) {
       body: JSON.stringify(requestBody)
     });
 
-    const data: any = await cfResponse.json();
+    let data: any = await cfResponse.json();
+    let finalEnv = isProd ? "production" : "sandbox";
+
+    // Self-healing fallback: If primary endpoint fails due to authentication or credentials, automatically try the alternate environment
+    const isAuthFailure = cfResponse.status === 401 || 
+                          data.message?.toLowerCase().includes("auth") || 
+                          data.message?.toLowerCase().includes("credential") ||
+                          data.message?.toLowerCase().includes("client");
+
+    if (!cfResponse.ok && isAuthFailure) {
+      const alternateEnv = isProd ? "sandbox" : "production";
+      const alternateUrl = isProd 
+        ? "https://sandbox.cashfree.com/pg/orders" 
+        : "https://api.cashfree.com/pg/orders";
+        
+      console.warn(`[VERCEL API CASHFREE] Primary authentication failed on ${isProd ? "production" : "sandbox"}. Retrying with fallback: ${alternateEnv}...`);
+      
+      try {
+        const fallbackResponse = await fetch(alternateUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-client-id": clientId,
+            "x-client-secret": clientSecret,
+            "x-api-version": "2023-08-01"
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        const fallbackData: any = await fallbackResponse.json();
+        if (fallbackResponse.ok) {
+          console.log(`[VERCEL API CASHFREE] Fallback authentication succeeded on ${alternateEnv}! Session ID: ${fallbackData.payment_session_id}`);
+          cfResponse = fallbackResponse;
+          data = fallbackData;
+          finalEnv = alternateEnv;
+        } else {
+          console.error(`[VERCEL API CASHFREE] Fallback to ${alternateEnv} also failed:`, fallbackData);
+        }
+      } catch (fallbackErr: any) {
+        console.error(`[VERCEL API CASHFREE] Fallback fetch error:`, fallbackErr.message);
+      }
+    }
 
     if (!cfResponse.ok) {
       console.error("[VERCEL API CASHFREE ERROR RESPONSE]:", JSON.stringify(data, null, 2));
@@ -148,13 +189,13 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    console.log(`[VERCEL API CASHFREE] Order session generated successfully. ID: ${data.payment_session_id}`);
+    console.log(`[VERCEL API CASHFREE] Order session generated successfully on ${finalEnv}. ID: ${data.payment_session_id}`);
     return res.status(200).json({
       success: true,
       payment_session_id: data.payment_session_id,
       cf_order_id: data.cf_order_id,
       order_status: data.order_status,
-      environment: isProd ? "production" : "sandbox"
+      environment: finalEnv
     });
   } catch (error: any) {
     console.error("[VERCEL API CASHFREE EXCEPTION]:", error.message);

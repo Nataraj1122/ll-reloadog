@@ -281,9 +281,9 @@ ${paymentMethod}`;
 app.post("/api/cashfree/create-order", async (req, res) => {
   const { order_id, order_amount, customer_details, return_url } = req.body;
   
-  const clientId = process.env.CASHFREE_CLIENT_ID;
-  const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
-  const isProd = process.env.CASHFREE_ENV === "production";
+  const clientId = process.env.CASHFREE_CLIENT_ID?.trim();
+  const clientSecret = process.env.CASHFREE_CLIENT_SECRET?.trim();
+  const isProd = process.env.CASHFREE_ENV?.trim() === "production";
   const url = isProd 
     ? "https://api.cashfree.com/pg/orders" 
     : "https://sandbox.cashfree.com/pg/orders";
@@ -455,9 +455,9 @@ app.get("/api/cashfree/get-status", async (req, res) => {
     return res.status(400).json({ success: false, error: "Missing order_id" });
   }
 
-  const clientId = process.env.CASHFREE_CLIENT_ID;
-  const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
-  const isProd = process.env.CASHFREE_ENV === "production";
+  const clientId = process.env.CASHFREE_CLIENT_ID?.trim();
+  const clientSecret = process.env.CASHFREE_CLIENT_SECRET?.trim();
+  const isProd = process.env.CASHFREE_ENV?.trim() === "production";
   const url = isProd 
     ? `https://api.cashfree.com/pg/orders/${order_id}` 
     : `https://sandbox.cashfree.com/pg/orders/${order_id}`;

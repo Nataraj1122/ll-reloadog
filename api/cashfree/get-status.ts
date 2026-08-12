@@ -9,9 +9,9 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: "Missing order_id" });
   }
 
-  const clientId = process.env.CASHFREE_CLIENT_ID;
-  const clientSecret = process.env.CASHFREE_CLIENT_SECRET;
-  const isProd = process.env.CASHFREE_ENV === "production";
+  const clientId = process.env.CASHFREE_CLIENT_ID?.trim();
+  const clientSecret = process.env.CASHFREE_CLIENT_SECRET?.trim();
+  const isProd = process.env.CASHFREE_ENV?.trim() === "production";
   const url = isProd 
     ? `https://api.cashfree.com/pg/orders/${order_id}` 
     : `https://sandbox.cashfree.com/pg/orders/${order_id}`;
